@@ -1,0 +1,16 @@
+<configuration>
+    <input>
+        <net-file value="01.net.xml"/>
+        <route-files value="02.rou.xml"/>
+    </input>
+    
+    <processing>
+        <time-to-teleport value="-1"/>
+    </processing>
+	
+    
+    <time>
+        <begin value="0"/>
+        <end value="3600"/>
+    </time>
+</configuration>

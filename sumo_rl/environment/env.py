@@ -103,8 +103,8 @@ class SumoEnvironment(gym.Env):
         max_depart_delay: int = -1,
         waiting_time_memory: int = 1000,
         time_to_teleport: int = -1,
-        delta_time: int = 5,
-        yellow_time: int = 2,
+        delta_time: int = 10,
+        yellow_time: int = 5,
         min_green: int = 5,
         max_green: int = 50,
         enforce_max_green: bool = False,
@@ -135,7 +135,7 @@ class SumoEnvironment(gym.Env):
         else:
             self._sumo_binary = sumolib.checkBinary("sumo")
 
-        assert delta_time > yellow_time, "Time between actions must be at least greater than yellow time."
+        assert delta_time >= yellow_time, "Time between actions must be at least equal to yellow time."
         assert max_green > min_green, "Max green time must be greater than min green time."
 
         self.begin_time = begin_time
@@ -428,32 +428,55 @@ class SumoEnvironment(gym.Env):
         waiting_times = [self.sumo.vehicle.getWaitingTime(vehicle) for vehicle in vehicles]
         num_backlogged_vehicles = len(self.sumo.simulation.getPendingVehicles())
         return {
-            "system_total_running": len(vehicles),
             "system_total_backlogged": num_backlogged_vehicles,
             "system_total_stopped": sum(
                 int(speed < 0.1) for speed in speeds
             ),  # In SUMO, a vehicle is considered halting if its speed is below 0.1 m/s
-            "system_total_arrived": self.num_arrived_vehicles,
-            "system_total_departed": self.num_departed_vehicles,
-            "system_total_teleported": self.num_teleported_vehicles,
             "system_total_waiting_time": sum(waiting_times),
             "system_mean_waiting_time": 0.0 if len(vehicles) == 0 else np.mean(waiting_times),
             "system_mean_speed": 0.0 if len(vehicles) == 0 else np.mean(speeds),
         }
 
     def _get_per_agent_info(self):
-        stopped = [self.traffic_signals[ts].get_total_queued() for ts in self.ts_ids]
-        accumulated_waiting_time = [
-            sum(self.traffic_signals[ts].get_accumulated_waiting_time_per_lane()) for ts in self.ts_ids
-        ]
-        average_speed = [self.traffic_signals[ts].get_average_speed() for ts in self.ts_ids]
         info = {}
-        for i, ts in enumerate(self.ts_ids):
-            info[f"{ts}_stopped"] = stopped[i]
-            info[f"{ts}_accumulated_waiting_time"] = accumulated_waiting_time[i]
-            info[f"{ts}_average_speed"] = average_speed[i]
-        info["agents_total_stopped"] = sum(stopped)
-        info["agents_total_accumulated_waiting_time"] = sum(accumulated_waiting_time)
+        for ts in self.ts_ids:
+            ts_obj = self.traffic_signals[ts]
+            # Vehicle metrics
+            info[f"{ts}_stopped"] = ts_obj.get_total_queued()
+            info[f"{ts}_accumulated_waiting_time"] = sum(ts_obj.get_accumulated_waiting_time_per_lane())
+            info[f"{ts}_average_speed"] = ts_obj.get_average_speed()
+            info[f"{ts}_reward"] = ts_obj.last_reward if ts_obj.last_reward is not None else 0.0
+            ctrl, total = ts_obj.get_phase_info()
+            info[f"{ts}_controlled_phases"] = ctrl
+            info[f"{ts}_total_phases"] = total
+            # Pedestrian metrics
+            jw_data = ts_obj.get_jaywalking_per_crossing()
+            info[f"{ts}_ped_queued"] = ts_obj.get_total_pedestrian_queued()
+            info[f"{ts}_ped_waiting_time"] = ts_obj.get_total_pedestrian_waiting_time()
+            info[f"{ts}_ped_max_wait"] = max(jw_data[c]["max_wait"] for c in ts_obj.crossing_ids)
+            info[f"{ts}_ped_expected_violations"] = ts_obj.get_total_expected_violations()
+            info[f"{ts}_current_phase"] = ts_obj.green_phase
+
+        # Vehicle summaries
+        info["agents_total_stopped"] = sum(self.traffic_signals[ts].get_total_queued() for ts in self.ts_ids)
+        info["agents_total_accumulated_waiting_time"] = sum(
+            sum(self.traffic_signals[ts].get_accumulated_waiting_time_per_lane()) for ts in self.ts_ids
+        )
+        info["agents_total_reward"] = sum(
+            self.traffic_signals[ts].last_reward for ts in self.ts_ids
+            if self.traffic_signals[ts].last_reward is not None
+        )
+        # Pedestrian summaries
+        info["agents_total_ped_queued"] = sum(
+            self.traffic_signals[ts].get_total_pedestrian_queued() for ts in self.ts_ids
+        )
+        info["agents_total_ped_waiting_time"] = sum(
+            self.traffic_signals[ts].get_total_pedestrian_waiting_time() for ts in self.ts_ids
+        )
+        info["agents_total_expected_violations"] = sum(
+            self.traffic_signals[ts].get_total_expected_violations() for ts in self.ts_ids
+        )
+
         return info
 
     def close(self):

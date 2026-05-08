@@ -113,3 +113,17 @@ settings.json
 *.csv
 /logs
 /wandb
+
+# training artifacts (large, machine-specific)
+/outputs/
+/ray_results/
+/ray_tmp/
+/checkpoints/
+*.tar.gz
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# misc
+*.b64
