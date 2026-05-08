@@ -47,9 +47,9 @@ OMEGA_P = 2.0   # pedestrian queue weight (paper says "see Section IV"; pick 2)
 # ═══════════════════════════════════════════════════════════════════════
 # Soft constraint budgets — paper Eq. (7), (11), (19)
 # ═══════════════════════════════════════════════════════════════════════
-D_P    = 1.0     # pedestrian non-compliance budget (E[Σγ^t C^p_i] ≤ d_p)
-D_S    = 0.5     # spillback budget (E[Σγ^t C^s_i] ≤ d_s)
-T_MAX  = 0.05    # Theil index ceiling (paper §II.D.3 says ≈0.05 = near-egalitarian)
+D_P    = 0.02    # tightened (was 1.0) — per-step C_p ≈ 0.04 in 2x2grid → constraint binds
+D_S    = 0.01    # tightened (was 0.5) — though C_s ≡ 0 here, kept tight for any spillback
+T_MAX  = 0.01    # tightened (was 0.05) — observed Theil ≈ 0.025 → constraint binds
 
 # ═══════════════════════════════════════════════════════════════════════
 # Training schedule — paper §III.D
@@ -66,8 +66,8 @@ BATCH_SIZE        = ROLLOUT_LENGTH * 4  # 4 agents × 720 steps = 2880 transitio
 # ═══════════════════════════════════════════════════════════════════════
 ACTOR_LR    = 3e-4
 CRITIC_LR   = 1e-3
-ETA_LAMBDA  = 1e-3   # intra-intersection dual lr (λ^p_i, λ^s_i)
-ETA_MU      = 1e-4   # inter-intersection dual lr (µ)
+ETA_LAMBDA  = 1e-2   # 10x — was 1e-3; needed to grow within 414 episodes
+ETA_MU      = 1e-3   # 10x — was 1e-4
 
 GAMMA       = 0.99
 GAE_LAMBDA  = 0.95
