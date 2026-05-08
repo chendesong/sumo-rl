@@ -47,15 +47,15 @@ OMEGA_P = 2.0   # pedestrian queue weight (paper says "see Section IV"; pick 2)
 # ═══════════════════════════════════════════════════════════════════════
 # Soft constraint budgets — paper Eq. (7), (11), (19)
 # ═══════════════════════════════════════════════════════════════════════
-D_P    = 0.02    # tightened (was 1.0) — per-step C_p ≈ 0.04 in 2x2grid → constraint binds
-D_S    = 0.01    # tightened (was 0.5) — though C_s ≡ 0 here, kept tight for any spillback
-T_MAX  = 0.01    # tightened (was 0.05) — observed Theil ≈ 0.025 → constraint binds
+D_P    = 0.05    # moderate (1.0 → 0.02 was too tight, drove policy to extremes)
+D_S    = 0.02    # moderate (C_s ≡ 0 in 2x2grid anyway)
+T_MAX  = 0.02    # moderate (observed Theil ≈ 0.025; constraint will lightly bind)
 
 # ═══════════════════════════════════════════════════════════════════════
 # Training schedule — paper §III.D
 # ═══════════════════════════════════════════════════════════════════════
 T_WARM            = 2000     # Stage 1: UE warm-up steps (paper default)
-TOTAL_STEPS       = 300_000  # match IPPO / MAPPO total
+TOTAL_STEPS       = 100_000  # short tuning run (was 300k); ~140 stage-2 episodes
 ROLLOUT_LENGTH    = 720      # one episode per rollout = 720 decision steps
 PPO_EPOCHS        = 10
 MINIBATCH_SIZE    = 256
@@ -66,8 +66,8 @@ BATCH_SIZE        = ROLLOUT_LENGTH * 4  # 4 agents × 720 steps = 2880 transitio
 # ═══════════════════════════════════════════════════════════════════════
 ACTOR_LR    = 3e-4
 CRITIC_LR   = 1e-3
-ETA_LAMBDA  = 1e-2   # 10x — was 1e-3; needed to grow within 414 episodes
-ETA_MU      = 1e-3   # 10x — was 1e-4
+ETA_LAMBDA  = 3e-3   # moderate (1e-3 → 1e-2 too aggressive)
+ETA_MU      = 3e-4   # moderate (1e-4 → 1e-3 too aggressive)
 
 GAMMA       = 0.99
 GAE_LAMBDA  = 0.95
