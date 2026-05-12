@@ -33,6 +33,12 @@ if "SUMO_HOME" not in os.environ:
 
 import sumo_rl
 from sumo_rl.environment.observations import PedestrianObservationFunction
+from sumo_rl.environment.traffic_signal import TrafficSignal
+
+import config as C
+
+# Wire the pedestrian/vehicle weight from config into the upstream reward fn.
+TrafficSignal.omega_p = C.OMEGA_P
 
 
 class FairTSCEnv:

@@ -46,6 +46,11 @@ class TrafficSignal:
     # Default min gap of SUMO (see https://sumo.dlr.de/docs/Simulation/Safety.html). Should this be parameterized?
     MIN_GAP = 2.5
 
+    # Pedestrian queue weight for the "queue-ped" reward (paper Eq. 15).
+    # Override at the class level (e.g. TrafficSignal.omega_p = ...) from the
+    # training entrypoint to wire it to a config value.
+    omega_p: float = 1.0
+
     def __init__(
         self,
         env,
@@ -637,10 +642,9 @@ class TrafficSignal:
         non-compliance, spillback) enter the main-method training via
         Lagrange multipliers, not through this reward.
         """
-        omega_p = 1.0  # hyperparameter; Section IV reports the value used
         veh_queue = self.get_total_queued()
         ped_queue = self.get_total_pedestrian_queued()
-        return -float(veh_queue) - omega_p * float(ped_queue)
+        return -float(veh_queue) - self.omega_p * float(ped_queue)
 
     def _get_veh_list(self):
         veh_list = []

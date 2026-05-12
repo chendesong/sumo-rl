@@ -42,7 +42,7 @@ STEPS_PER_EPISODE = NUM_SECONDS // DELTA_TIME  # = 720
 # Reward — paper Eq. (15)
 # R_i(t) = -Σ q^v_{i,k} - ω_p · Σ q^p_{i,c}
 # ═══════════════════════════════════════════════════════════════════════
-OMEGA_P = 2.0   # pedestrian queue weight (paper says "see Section IV"; pick 2)
+OMEGA_P = 1.0   # pedestrian queue weight — equal to vehicle queue weight (1:1)
 
 # ═══════════════════════════════════════════════════════════════════════
 # Soft constraint budgets — paper Eq. (7), (11), (19)
