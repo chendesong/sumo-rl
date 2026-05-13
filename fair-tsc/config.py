@@ -65,8 +65,12 @@ T_MAX  = 0.02    # Theil budget (will lightly bind when IPPO baseline shows inte
 # ═══════════════════════════════════════════════════════════════════════
 # Training schedule — paper §III.D
 # ═══════════════════════════════════════════════════════════════════════
-T_WARM            = 2000      # Stage 1: UE warm-up steps (~3 episodes)
-TOTAL_STEPS       = 200_000   # Stage 2: ~275 episodes for 4x4 (was 100k for 2x2)
+T_WARM            = 7200      # Stage 1: UE warm-up — 10 episodes
+                              # diag on 4x4 high w/ REWARD_SCALE=30 showed UE
+                              # critic EV saturates at ep ~5-7 (0.94 -> 0.98);
+                              # 10 ep leaves a 3-episode buffer past saturation
+TOTAL_STEPS       = 300_000   # Stage 2: ~417 episodes — 4x4 + Lagrangian
+                              # constraints needs more than 2x2's 100k
 ROLLOUT_LENGTH    = 720       # one episode per rollout = 720 decision steps
 PPO_EPOCHS        = 10
 MINIBATCH_SIZE    = 512       # raised from 256 — buffer is 4x bigger now
