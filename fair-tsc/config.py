@@ -47,6 +47,12 @@ STEPS_PER_EPISODE = NUM_SECONDS // DELTA_TIME  # = 720
 # ═══════════════════════════════════════════════════════════════════════
 OMEGA_P = 1.0   # pedestrian queue weight — equal to vehicle queue weight (1:1)
 
+# Reward scaling applied in sumo_env.step() — divides raw queue reward by
+# this constant before returning to the training loop. Critic targets in 4x4
+# high-demand are ~-3000 raw; scaling to ~-100 lets value_loss converge.
+# Does not change the optimal policy (positive linear transform of reward).
+REWARD_SCALE = 30.0
+
 # ═══════════════════════════════════════════════════════════════════════
 # Soft constraint budgets — paper Eq. (7), (11), (19)
 # ═══════════════════════════════════════════════════════════════════════

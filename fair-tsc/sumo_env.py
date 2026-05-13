@@ -181,9 +181,11 @@ class FairTSCEnv:
             except Exception:
                 c_s[a] = 0.0
 
-        # Cast obs / rewards to clean float32 keyed by sorted agent order
+        # Cast obs / rewards to clean float32 keyed by sorted agent order.
+        # Rewards are scaled by C.REWARD_SCALE so critic targets stay in a
+        # learnable range (raw 4x4 high-demand returns are ~-3000).
         next_obs = {a: obs_dict[a].astype(np.float32) for a in self.agent_ids if a in obs_dict}
-        rewards  = {a: float(reward_dict.get(a, 0.0)) for a in self.agent_ids}
+        rewards  = {a: float(reward_dict.get(a, 0.0)) / C.REWARD_SCALE for a in self.agent_ids}
 
         # Done = all agents done (episode ends when SUMO horizon reached)
         done_all = all(term_dict.get(a, False) or trunc_dict.get(a, False) for a in self.agent_ids)
