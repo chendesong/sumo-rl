@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nodes>
+  <node id="J11" x="300" y="750" type="traffic_light"/>
+  <node id="J12" x="450" y="750" type="traffic_light"/>
+  <node id="J13" x="600" y="750" type="traffic_light"/>
+  <node id="J14" x="750" y="750" type="traffic_light"/>
+  <node id="J21" x="300" y="600" type="traffic_light"/>
+  <node id="J22" x="450" y="600" type="traffic_light"/>
+  <node id="J23" x="600" y="600" type="traffic_light"/>
+  <node id="J24" x="750" y="600" type="traffic_light"/>
+  <node id="J31" x="300" y="450" type="traffic_light"/>
+  <node id="J32" x="450" y="450" type="traffic_light"/>
+  <node id="J33" x="600" y="450" type="traffic_light"/>
+  <node id="J34" x="750" y="450" type="traffic_light"/>
+  <node id="J41" x="300" y="300" type="traffic_light"/>
+  <node id="J42" x="450" y="300" type="traffic_light"/>
+  <node id="J43" x="600" y="300" type="traffic_light"/>
+  <node id="J44" x="750" y="300" type="traffic_light"/>
+  <node id="N1" x="300" y="900" type="dead_end"/>
+  <node id="S1" x="300" y="150" type="dead_end"/>
+  <node id="N2" x="450" y="900" type="dead_end"/>
+  <node id="S2" x="450" y="150" type="dead_end"/>
+  <node id="N3" x="600" y="900" type="dead_end"/>
+  <node id="S3" x="600" y="150" type="dead_end"/>
+  <node id="N4" x="750" y="900" type="dead_end"/>
+  <node id="S4" x="750" y="150" type="dead_end"/>
+  <node id="W1" x="150" y="750" type="dead_end"/>
+  <node id="E1" x="900" y="750" type="dead_end"/>
+  <node id="W2" x="150" y="600" type="dead_end"/>
+  <node id="E2" x="900" y="600" type="dead_end"/>
+  <node id="W3" x="150" y="450" type="dead_end"/>
+  <node id="E3" x="900" y="450" type="dead_end"/>
+  <node id="W4" x="150" y="300" type="dead_end"/>
+  <node id="E4" x="900" y="300" type="dead_end"/>
+</nodes>
