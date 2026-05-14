@@ -82,7 +82,13 @@ BATCH_SIZE        = ROLLOUT_LENGTH * 16   # 16 agents × 720 steps = 11520
 ACTOR_LR    = 3e-4
 CRITIC_LR   = 1e-3
 ETA_LAMBDA  = 3e-3
-ETA_MU      = 3e-4
+ETA_MU      = 3e-2     # raised from 3e-4 (100x): prior 33h run on 4x4 high
+                       # showed Theil saturating at 1.22 vs T_MAX=0.02, µ only
+                       # reached 0.053 after 170 episodes -- way too slow.
+                       # NOTE: this violates two-timescale (η_µ >> η_θ=3e-4);
+                       # accepted because constraint must actually bind. Watch
+                       # for µ oscillation in train_log; if it overshoots,
+                       # back off to 1e-2.
 
 GAMMA       = 0.99
 GAE_LAMBDA  = 0.95
