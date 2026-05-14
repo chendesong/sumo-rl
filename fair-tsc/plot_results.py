@@ -13,6 +13,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+# Pull current budgets so annotations match the run that was actually performed.
+sys.path.insert(0, os.path.dirname(__file__))
+import config as C
+
 
 def find_latest_log():
     base = os.path.join(os.path.dirname(__file__), "..", "outputs")
@@ -51,7 +55,7 @@ def main():
     # 3) Theil index
     ax = axes[0, 2]
     ax.plot(s2.episode, s2.theil, lw=1)
-    ax.axhline(0.05, ls="--", c="r", label="T_MAX=0.05")
+    ax.axhline(C.T_MAX, ls="--", c="r", label=f"T_MAX={C.T_MAX}")
     ax.set_title("Theil-T index (fairness)"); ax.set_xlabel("episode"); ax.legend(); ax.grid(alpha=0.3)
 
     # 4) Sacrifice gap
@@ -65,14 +69,16 @@ def main():
     ax.plot(s2.episode, s2.lambda_p_mean, label="λ_p mean")
     ax.plot(s2.episode, s2.lambda_s_mean, label="λ_s mean")
     ax.plot(s2.episode, s2.mu, label="µ")
-    ax.set_title("Lagrangian multipliers (all 0 → constraints not binding)")
+    ax.set_title("Lagrangian multipliers (non-zero ⇒ constraint binding)")
     ax.set_xlabel("episode"); ax.legend(); ax.grid(alpha=0.3)
 
-    # 6) Constraint costs
+    # 6) Constraint costs (per-step means; budgets are per-step too)
     ax = axes[1, 2]
-    ax.plot(df.episode, df.C_p_mean, label="C_p (per-ep sum)")
-    ax.plot(df.episode, df.C_s_mean, label="C_s (per-ep sum)")
-    ax.set_title("Constraint costs (note: C_s ≡ 0 → no spillback)")
+    ax.plot(df.episode, df.C_p_mean / C.ROLLOUT_LENGTH, label="C_p (per-step mean)")
+    ax.plot(df.episode, df.C_s_mean / C.ROLLOUT_LENGTH, label="C_s (per-step mean)")
+    ax.axhline(C.D_P, ls="--", c="C0", alpha=0.4, label=f"D_P={C.D_P}")
+    ax.axhline(C.D_S, ls="--", c="C1", alpha=0.4, label=f"D_S={C.D_S}")
+    ax.set_title("Constraint costs vs. budgets")
     ax.set_xlabel("episode"); ax.legend(); ax.grid(alpha=0.3)
 
     # 7) Entropy
@@ -106,12 +112,22 @@ def main():
     print(f"Total episodes: {len(df)}  (Stage 1: {len(s1)}, Stage 2: {len(s2)})")
     print(f"Total steps:    {df.global_step.iloc[-1]}")
     print(f"Wall time:      {df.wall_time_s.iloc[-1] / 60:.1f} min")
-    print(f"Reward (start → end, Stage 2):  {s2.reward_mean.iloc[0]:+.1f}  →  {s2.reward_mean.iloc[-1]:+.1f}")
-    print(f"Reward (last 20-ep mean):       {s2.reward_mean.tail(20).mean():+.1f}")
-    print(f"Theil  (last 20-ep mean):       {s2.theil.tail(20).mean():.4f}  (budget T_MAX=0.05)")
-    print(f"C_p    (last 20-ep mean):       {df.C_p_mean.tail(20).mean():.2f}  per-step ≈ {df.C_p_mean.tail(20).mean()/720:.4f}  (budget D_P=1.0 per-step)")
-    print(f"C_s    (last 20-ep mean):       {df.C_s_mean.tail(20).mean():.2f}  (always zero — no spillback)")
+    if len(s2):
+        print(f"Reward (S2 start → end):        {s2.reward_mean.iloc[0]:+.1f}  →  {s2.reward_mean.iloc[-1]:+.1f}")
+        print(f"Reward (last 20-ep mean):       {s2.reward_mean.tail(20).mean():+.1f}")
+        theil_end = s2.theil.tail(20).mean()
+        print(f"Theil  (last 20-ep mean):       {theil_end:.4f}  (budget T_MAX={C.T_MAX})  "
+              f"{'BINDS' if theil_end > C.T_MAX else 'satisfied'}")
+    cp_step = df.C_p_mean.tail(20).mean() / C.ROLLOUT_LENGTH
+    cs_step = df.C_s_mean.tail(20).mean() / C.ROLLOUT_LENGTH
+    print(f"C_p    (last 20-ep per-step):   {cp_step:.4f}  (budget D_P={C.D_P})  "
+          f"{'BINDS' if cp_step > C.D_P else 'satisfied'}")
+    print(f"C_s    (last 20-ep per-step):   {cs_step:.4f}  (budget D_S={C.D_S})  "
+          f"{'BINDS' if cs_step > C.D_S else 'satisfied'}")
     print(f"Entropy (start → end):          {df.entropy.iloc[0]:.3f} → {df.entropy.iloc[-1]:.3f}")
+    if len(s2):
+        print(f"λ_p / λ_s / µ (end):            "
+              f"{s2.lambda_p_mean.iloc[-1]:.3f} / {s2.lambda_s_mean.iloc[-1]:.3f} / {s2.mu.iloc[-1]:.3f}")
 
 
 if __name__ == "__main__":
