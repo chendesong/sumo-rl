@@ -1,6 +1,6 @@
 """Dual-level fairness utilities for Fair-TSC.
 
-This module replaces the old multi-constraint Lagrangian code.  It keeps
+This module replaces the old multi-constraint penalty code.  It keeps
 the inter-intersection sacrifice-gap Theil metric, adds intra-intersection
 phase-service fairness, and controls one adaptive fairness weight with a
 PID-style controller.

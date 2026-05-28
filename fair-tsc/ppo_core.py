@@ -2,7 +2,7 @@
 Generic PPO update for Fair-TSC.
 
 Used twice (with different networks + buffers):
-  - Stage 1 / UE rollouts:  update π_UE, V^UE on D_UE      (no Lagrangian terms)
+  - Stage 1 / UE rollouts:  update π_UE, V^UE on D_UE      (no fairness penalty)
   - Stage 2 / MARL rollouts: update π_θ, V^MARL on D_MARL  (with fair advantage)
 
 Standard PPO-clip + value-loss + entropy bonus. Advantage normalisation

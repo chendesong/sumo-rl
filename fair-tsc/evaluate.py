@@ -31,7 +31,7 @@ file is to keep the comparison apples-to-apples.
 
 Returned keys:
     theil_ema      :  Theil-T on EMA(per-agent δ̄_i) with β = config.THEIL_EMA_BETA
-                      (mirrors `lagrangian.LagrangianMultipliers.compute_smoothed_theil`)
+                      (same smoothing rule used by the Fair-TSC trainer)
     theil_raw      :  Single-episode Theil-T on per-agent δ̄_i (diagnostic)
     efficiency     :  -mean(system_total_waiting_time)  — higher is better.
                       Falls back to mean(reward) if waiting-time series absent.
@@ -66,8 +66,7 @@ def update_ema(prev_ema: Optional[np.ndarray],
                beta: float = None) -> np.ndarray:
     """Pure-function EMA: ema_t = β·ema_{t-1} + (1-β)·x_t.
 
-    Matches `LagrangianMultipliers.compute_smoothed_theil` semantics so
-    Fair-TSC and baselines use the EXACT same smoothing.
+    Fair-TSC and baselines use the exact same smoothing rule.
     """
     if beta is None:
         beta = C.THEIL_EMA_BETA

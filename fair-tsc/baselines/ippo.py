@@ -2,7 +2,7 @@
 
 Same actor / critic architecture as Fair-TSC and the same PPO update,
 but:
-  - NO Lagrangian dual variables (no λ^p, λ^s, µ)
+  - NO PID fairness penalty
   - NO sacrifice gap δ computed during training
   - NO UE warm-up stage
   - Critic still uses the global obs (the SharedCritic interface) so
@@ -10,7 +10,7 @@ but:
     critic, independent execution", which is the most common form of
     IPPO in TSC literature.  Switching to a strictly local critic would
     require a new network class; keeping CC keeps the comparison fair
-    on the *value-function side* and isolates the Lagrangian effect.
+    on the *value-function side* and isolates the fairness-penalty effect.
 
 After 50 training episodes, ONE final eval rollout is collected and
 δ is computed under the unified formula
