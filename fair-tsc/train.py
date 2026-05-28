@@ -89,6 +89,19 @@ def collect_one_episode(env, actor, critic, buffer, device, seed=None):
             obs = next_obs
         n_steps += 1
 
+    if C.REWARD_NORMALIZE:
+        reward_norm = buffer.normalize_rewards(
+            center=C.REWARD_NORM_CENTER,
+            clip=C.REWARD_NORM_CLIP,
+            eps=C.REWARD_NORM_EPS,
+        )
+    else:
+        reward_norm = {
+            "reward_norm_enabled": 0,
+            "reward_norm_mean": 0.0,
+            "reward_norm_std": 1.0,
+        }
+
     last_v = bootstrap_last_values(critic, env.get_global_obs(obs), env.agent_ids, env.num_agents, device)
     buffer.compute_gae(last_v, gamma=C.GAMMA, gae_lambda=C.GAE_LAMBDA, device=device)
     ped_expected = _mean_or_zero(ped_expected_series)
@@ -97,7 +110,7 @@ def collect_one_episode(env, actor, critic, buffer, device, seed=None):
         "ped_expected_violations": ped_expected,
         "ped_risk": normalize_pedestrian_risk(ped_expected, num_agents=env.num_agents),
     }
-    return ep_reward, n_steps, safety
+    return ep_reward, n_steps, safety, reward_norm
 
 
 def compute_dual_level_fairness(env, buffer, deltas):
@@ -159,6 +172,10 @@ def main():
     print(f"device = {device}")
     print(f"mode = {'Fair-TSC PID' if C.FAIRNESS_ENABLED else 'vanilla MAPPO calibration'}")
     print(f"T_INTER_0={C.T_INTER_0:.6f}  T_INTRA_0={C.T_INTRA_0:.6f}")
+    print(
+        f"reward_norm={int(C.REWARD_NORMALIZE)} center={int(C.REWARD_NORM_CENTER)} "
+        f"clip={C.REWARD_NORM_CLIP:g}"
+    )
 
     os.makedirs(C.OUTPUT_DIR, exist_ok=True)
     os.makedirs(C.CKPT_DIR, exist_ok=True)
@@ -212,6 +229,9 @@ def main():
         "reward_min",
         "reward_max",
         *[f"reward_{a}" for a in env.agent_ids],
+        "reward_norm_enabled",
+        "reward_norm_mean",
+        "reward_norm_std",
         "delta_mean",
         "delta_max",
         "theil_inter",
@@ -259,7 +279,7 @@ def main():
     print(f"\n{'=' * 70}\nSTAGE 1: UE warm-up   target={C.T_WARM} steps\n{'=' * 70}")
     while global_step < C.T_WARM:
         buffer = RolloutBuffer(env.agent_ids, env.num_agents)
-        ep_reward, n, safety = collect_one_episode(
+        ep_reward, n, safety, reward_norm = collect_one_episode(
             env, actor_ue, critic_ue, buffer, device, seed=C.SEED + episode
         )
         global_step += n
@@ -298,6 +318,7 @@ def main():
                 "reward_min": float(rewards.min()),
                 "reward_max": float(rewards.max()),
                 **{f"reward_{a}": float(ep_reward[a]) for a in env.agent_ids},
+                **reward_norm,
                 "delta_mean": 0.0,
                 "delta_max": 0.0,
                 "theil_inter": 0.0,
@@ -322,7 +343,7 @@ def main():
     print(f"{'=' * 70}\nSTAGE 2: MARL training   target={C.TOTAL_STEPS} total steps\n{'=' * 70}")
     while global_step < C.TOTAL_STEPS:
         buffer = RolloutBuffer(env.agent_ids, env.num_agents)
-        ep_reward, n, safety = collect_one_episode(
+        ep_reward, n, safety, reward_norm = collect_one_episode(
             env, actor_marl, critic_marl, buffer, device, seed=C.SEED + episode
         )
         global_step += n
@@ -394,6 +415,7 @@ def main():
                 "reward_min": float(rewards.min()),
                 "reward_max": float(rewards.max()),
                 **{f"reward_{a}": float(ep_reward[a]) for a in env.agent_ids},
+                **reward_norm,
                 "delta_mean": float(deltas.mean().item()),
                 "delta_max": float(deltas.max().item()),
                 "theil_inter": float(fair["theil_inter"]),
@@ -422,6 +444,9 @@ def main():
                     "T_INTER_0": C.T_INTER_0,
                     "T_INTRA_0": C.T_INTRA_0,
                     "FAIR_ALPHA": C.FAIR_ALPHA,
+                    "REWARD_NORMALIZE": C.REWARD_NORMALIZE,
+                    "REWARD_NORM_CENTER": C.REWARD_NORM_CENTER,
+                    "REWARD_NORM_CLIP": C.REWARD_NORM_CLIP,
                 },
                 ckpt_path,
             )
@@ -441,6 +466,9 @@ def main():
             "T_INTER_0": C.T_INTER_0,
             "T_INTRA_0": C.T_INTRA_0,
             "FAIR_ALPHA": C.FAIR_ALPHA,
+            "REWARD_NORMALIZE": C.REWARD_NORMALIZE,
+            "REWARD_NORM_CENTER": C.REWARD_NORM_CENTER,
+            "REWARD_NORM_CLIP": C.REWARD_NORM_CLIP,
         },
         final_path,
     )

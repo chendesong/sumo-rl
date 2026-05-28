@@ -10,6 +10,12 @@ import os
 import time
 
 
+def _env_bool(name: str, default: str) -> bool:
+    return os.environ.get(name, default).lower() not in {
+        "0", "false", "no", "off"
+    }
+
+
 # Paths
 if os.environ.get("FAIR_TSC_BASE_DIR"):
     BASE_DIR = os.environ["FAIR_TSC_BASE_DIR"]
@@ -27,9 +33,7 @@ ROUTE_FILE = os.path.join(BASE_DIR, f"nets/4x4grid/4x4_{DEMAND_LEVEL}.rou.xml")
 
 # Training mode
 _fairness_env = os.environ.get("FAIR_TSC_FAIRNESS_ENABLED", os.environ.get("FAIRNESS_ENABLED", "1"))
-FAIRNESS_ENABLED = _fairness_env.lower() not in {
-    "0", "false", "no", "off"
-}
+FAIRNESS_ENABLED = _env_bool("FAIR_TSC_FAIRNESS_ENABLED", _fairness_env)
 
 _TS = time.strftime("%Y%m%d_%H%M")
 RUN_PREFIX = "fair_tsc" if FAIRNESS_ENABLED else "mappo_calib"
@@ -50,6 +54,10 @@ STEPS_PER_EPISODE = NUM_SECONDS // DELTA_TIME
 # Reward
 OMEGA_P = 1.0
 REWARD_SCALE = 30.0
+REWARD_NORMALIZE = _env_bool("FAIR_TSC_REWARD_NORMALIZE", "1")
+REWARD_NORM_CENTER = _env_bool("FAIR_TSC_REWARD_NORM_CENTER", "0")
+REWARD_NORM_CLIP = float(os.environ.get("FAIR_TSC_REWARD_NORM_CLIP", "10.0"))
+REWARD_NORM_EPS = 1e-8
 
 
 # Dual-level fairness and PID adaptive penalty

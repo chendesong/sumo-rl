@@ -92,6 +92,47 @@ class RolloutBuffer:
     # GAE — per-agent, temporal order preserved
     # ─────────────────────────────────────────────────────────────────
 
+    def normalize_rewards(
+        self,
+        *,
+        center: bool = False,
+        clip: float = 10.0,
+        eps: float = 1e-8,
+    ) -> dict:
+        """Normalize collected rewards before GAE.
+
+        Default behaviour divides by the rollout reward standard deviation
+        without subtracting the mean. This keeps the reward sign and
+        relative efficiency signal intact while stabilising critic targets.
+        """
+        values = [r for aid in self.agent_ids for r in self.trajs[aid].rewards]
+        if not values:
+            return {
+                "reward_norm_enabled": 0,
+                "reward_norm_mean": 0.0,
+                "reward_norm_std": 1.0,
+            }
+
+        arr = np.asarray(values, dtype=np.float32)
+        mean = float(arr.mean())
+        std = float(arr.std())
+        scale = max(std, float(eps))
+        for aid in self.agent_ids:
+            rewards = self.trajs[aid].rewards
+            if center:
+                normed = [(r - mean) / scale for r in rewards]
+            else:
+                normed = [r / scale for r in rewards]
+            if clip is not None and clip > 0:
+                normed = [float(np.clip(r, -clip, clip)) for r in normed]
+            self.trajs[aid].rewards = [float(r) for r in normed]
+
+        return {
+            "reward_norm_enabled": 1,
+            "reward_norm_mean": mean,
+            "reward_norm_std": scale,
+        }
+
     def compute_gae(
         self,
         last_values: dict,
