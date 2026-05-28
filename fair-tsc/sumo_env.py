@@ -14,9 +14,14 @@ from __future__ import annotations
 
 import copy
 import os
+import sys
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
 
 os.environ.setdefault("LIBSUMO_AS_TRACI", "1")
 
