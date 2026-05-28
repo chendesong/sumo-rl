@@ -1,31 +1,25 @@
-"""
-Fair-TSC environment wrapper.
+"""Fair-TSC environment wrapper.
 
-Wraps sumo_rl.parallel_env to expose, ON EVERY STEP, the four quantities
-the training loop needs:
+The wrapper keeps the hand-written PPO loop independent from PettingZoo
+details and records phase activation start times for intra-intersection
+fairness:
 
-    obs[i]      : local observation of agent i  (paper Eq. 13)
-    reward[i]   : queue-based local reward      (paper Eq. 15)
-    C_p[i]      : pedestrian non-compliance     (paper Eq. 6)
-    C_s[i]      : spillback cost                (paper Eq. 10)
+    ell_{i,sigma,m} = t_start_{i,sigma,m+1} - t_start_{i,sigma,m}
 
-Plus a method for global state (concatenation of all agents' local states)
-needed by the centralised critics V^MARL and V^UE.
-
-Unlike the previous MAPPOEnvWrapper, this is NOT an RLlib MultiAgentEnv —
-this is a thin functional wrapper for our hand-written PPO loop.
+Legacy C_p/C_s return slots are preserved as zeros so older baselines do
+not need signature changes, but they are no longer training constraints.
 """
 
+from __future__ import annotations
+
+import copy
 import os
-import sys
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-# Tell sumo-rl to use libsumo; must be set BEFORE importing sumo_rl
 os.environ.setdefault("LIBSUMO_AS_TRACI", "1")
 
-# fake SUMO_HOME (libsumo is the actual backend)
 if "SUMO_HOME" not in os.environ:
     fake = "/tmp/sumo_fake" if os.name != "nt" else os.path.join(os.getenv("TEMP", "."), "sumo_fake")
     os.makedirs(os.path.join(fake, "tools"), exist_ok=True)
@@ -36,28 +30,25 @@ from sumo_rl.environment.observations import PedestrianObservationFunction
 from sumo_rl.environment.traffic_signal import TrafficSignal
 
 import config as C
+from fairness import phase_service_theil_from_intervals
 
-# Wire the pedestrian/vehicle weight from config into the upstream reward fn.
+
 TrafficSignal.omega_p = C.OMEGA_P
 
 
 class FairTSCEnv:
-    """Thin functional wrapper around sumo_rl.parallel_env.
-
-    Exposes per-agent (obs, reward, C_p, C_s) plus a concatenated global
-    state for the centralised critics. Maintains agent ordering across
-    resets so policy networks see consistent indexing.
-    """
+    """Thin functional wrapper around ``sumo_rl.parallel_env``."""
 
     def __init__(
         self,
         net_file: str,
         route_file: str,
-        out_csv_name: str = None,
+        out_csv_name: Optional[str] = None,
         num_seconds: int = 3600,
         delta_time: int = 5,
         min_green: int = 5,
         use_gui: bool = False,
+        additional_sumo_cmd: Optional[str] = None,
     ):
         self.net_file = net_file
         self.route_file = route_file
@@ -66,22 +57,22 @@ class FairTSCEnv:
         self.delta_time = delta_time
         self.min_green = min_green
         self.use_gui = use_gui
+        self.additional_sumo_cmd = additional_sumo_cmd
 
-        # Defer construction until reset()
         self._par_env = None
         self.agent_ids: List[str] = []
-        self.num_agents: int = 0
-        self.local_obs_dim: int = 0
-        self.global_obs_dim: int = 0
-        self.action_dim: int = 0
+        self.num_agents = 0
+        self.local_obs_dim = 0
+        self.global_obs_dim = 0
+        self.action_dim = 0
 
-        # Initialise once to fix dimensions
+        self._phase_start_log: Dict[str, Dict[int, List[float]]] = {}
+        self._last_phase: Dict[str, int] = {}
+        self._phase_count: Dict[str, int] = {}
+        self._pending_phase_start: Dict[str, Tuple[int, float]] = {}
+
         self._build_env()
         _ = self.reset()
-
-    # ─────────────────────────────────────────────────────────────────
-    # Internal: build / rebuild the underlying sumo_rl ParallelEnv
-    # ─────────────────────────────────────────────────────────────────
 
     def _build_env(self):
         if self._par_env is not None:
@@ -101,42 +92,31 @@ class FairTSCEnv:
             min_green=self.min_green,
             reward_fn="queue-ped",
             observation_class=PedestrianObservationFunction,
+            additional_sumo_cmd=self.additional_sumo_cmd,
         )
 
     def _walk_to_sumo_env(self):
-        """Walk PettingZoo wrapper chain to find the underlying SumoEnvironment.
-
-        Needed so we can access traffic_signals[i] for C^p / C^s.
-        """
         obj = self._par_env
         if hasattr(obj, "aec_env"):
             obj = obj.aec_env
         for _ in range(10):
             if hasattr(obj, "traffic_signals"):
                 return obj
-            elif hasattr(obj, "env"):
+            if hasattr(obj, "env"):
                 obj = obj.env
-            elif hasattr(obj, "unwrapped"):
+                continue
+            if hasattr(obj, "unwrapped"):
                 obj = obj.unwrapped
-            else:
-                break
+                continue
+            break
         raise RuntimeError("Could not locate SumoEnvironment in PettingZoo wrapper chain")
 
-    # ─────────────────────────────────────────────────────────────────
-    # Public API
-    # ─────────────────────────────────────────────────────────────────
-
-    def reset(self, seed: int = None) -> Dict[str, np.ndarray]:
-        """Reset and return {agent_id: local_obs}.
-
-        Side effect: caches agent ordering and obs/action dims on first call.
-        """
+    def reset(self, seed: Optional[int] = None) -> Dict[str, np.ndarray]:
         if self._par_env is None:
             self._build_env()
 
         obs_dict, _ = self._par_env.reset(seed=seed)
 
-        # Cache agent ordering (sorted for determinism)
         if not self.agent_ids:
             self.agent_ids = sorted(self._par_env.agents)
             self.num_agents = len(self.agent_ids)
@@ -144,59 +124,148 @@ class FairTSCEnv:
             self.global_obs_dim = self.local_obs_dim * self.num_agents
             self.action_dim = self._par_env.action_space(self.agent_ids[0]).n
 
+        self._reset_phase_log()
         return {a: obs_dict[a].astype(np.float32) for a in self.agent_ids}
 
     def step(
         self, action_dict: Dict[str, int]
     ) -> Tuple[
-        Dict[str, np.ndarray],   # next_obs
-        Dict[str, float],        # rewards
-        Dict[str, float],        # C_p (per agent)
-        Dict[str, float],        # C_s (per agent)
-        bool,                    # done (any-agent-done OR all-agents-done; we use all)
-        dict,                    # info
+        Dict[str, np.ndarray],
+        Dict[str, float],
+        Dict[str, float],
+        Dict[str, float],
+        bool,
+        dict,
     ]:
-        """One environment step.
-
-        Returns per-agent dicts plus C^p_i / C^s_i (paper Eq. 6, 10).
-        """
         obs_dict, reward_dict, term_dict, trunc_dict, info_dict = self._par_env.step(action_dict)
+        self._record_phase_activation_changes()
 
-        # Pull C^p, C^s from each TrafficSignal
-        sumo_env = self._walk_to_sumo_env()
-        c_p = {}
-        c_s = {}
-        for a in self.agent_ids:
-            ts = sumo_env.traffic_signals.get(a)
-            if ts is None:
-                c_p[a] = 0.0
-                c_s[a] = 0.0
-                continue
-            try:
-                c_p[a] = float(ts.get_total_expected_violations())
-            except Exception:
-                c_p[a] = 0.0
-            try:
-                c_s[a] = float(ts.get_spillback_cost())
-            except Exception:
-                c_s[a] = 0.0
-
-        # Cast obs / rewards to clean float32 keyed by sorted agent order.
-        # Rewards are scaled by C.REWARD_SCALE so critic targets stay in a
-        # learnable range (raw 4x4 high-demand returns are ~-3000).
         next_obs = {a: obs_dict[a].astype(np.float32) for a in self.agent_ids if a in obs_dict}
-        rewards  = {a: float(reward_dict.get(a, 0.0)) / C.REWARD_SCALE for a in self.agent_ids}
+        rewards = {a: float(reward_dict.get(a, 0.0)) / C.REWARD_SCALE for a in self.agent_ids}
 
-        # Done = all agents done (episode ends when SUMO horizon reached)
+        c_p = {a: 0.0 for a in self.agent_ids}
+        c_s = {a: 0.0 for a in self.agent_ids}
         done_all = all(term_dict.get(a, False) or trunc_dict.get(a, False) for a in self.agent_ids)
+
+        if done_all:
+            self._inject_info_metrics(info_dict, self.get_phase_service_summary())
 
         return next_obs, rewards, c_p, c_s, done_all, info_dict
 
     def get_global_obs(self, obs_dict: Dict[str, np.ndarray]) -> np.ndarray:
-        """Concat per-agent obs in fixed order to form global state for critics."""
-        return np.concatenate(
-            [obs_dict[a] for a in self.agent_ids], axis=0
-        ).astype(np.float32)
+        return np.concatenate([obs_dict[a] for a in self.agent_ids], axis=0).astype(np.float32)
+
+    def _sim_time(self) -> float:
+        try:
+            return float(self._walk_to_sumo_env().sim_step)
+        except Exception:
+            return 0.0
+
+    def _reset_phase_log(self):
+        sumo_env = self._walk_to_sumo_env()
+        now = float(getattr(sumo_env, "sim_step", 0.0))
+        self._phase_start_log = {}
+        self._last_phase = {}
+        self._phase_count = {}
+        self._pending_phase_start = {}
+
+        for agent in self.agent_ids:
+            ts = sumo_env.traffic_signals.get(agent)
+            phase_count = int(getattr(ts, "num_green_phases", self.action_dim)) if ts is not None else self.action_dim
+            current_phase = int(getattr(ts, "green_phase", 0)) if ts is not None else 0
+            self._phase_count[agent] = phase_count
+            self._phase_start_log[agent] = {p: [] for p in range(phase_count)}
+            self._append_phase_start(agent, current_phase, now)
+            self._last_phase[agent] = current_phase
+
+    def _append_phase_start(self, agent: str, phase: int, start_time: float):
+        log = self._phase_start_log.setdefault(agent, {})
+        starts = log.setdefault(int(phase), [])
+        start_time = float(start_time)
+        if not starts or abs(starts[-1] - start_time) > 1e-6:
+            starts.append(start_time)
+
+    def _record_phase_activation_changes(self):
+        sumo_env = self._walk_to_sumo_env()
+        now = float(getattr(sumo_env, "sim_step", self._sim_time()))
+
+        for agent in self.agent_ids:
+            pending = self._pending_phase_start.get(agent)
+            if pending is not None:
+                phase, start_time = pending
+                if now >= start_time:
+                    self._append_phase_start(agent, phase, start_time)
+                    self._pending_phase_start.pop(agent, None)
+
+            ts = sumo_env.traffic_signals.get(agent)
+            if ts is None:
+                continue
+
+            current_phase = int(getattr(ts, "green_phase", 0))
+            previous_phase = self._last_phase.get(agent)
+            if previous_phase is None:
+                self._last_phase[agent] = current_phase
+                self._append_phase_start(agent, current_phase, now)
+                continue
+            if current_phase == previous_phase:
+                continue
+
+            phase_age = float(getattr(ts, "time_since_last_phase_change", 0.0))
+            yellow_time = float(getattr(ts, "yellow_time", 0.0))
+            transition_start = max(0.0, now - phase_age)
+            green_start = transition_start + yellow_time
+
+            if now >= green_start:
+                self._append_phase_start(agent, current_phase, green_start)
+            else:
+                self._pending_phase_start[agent] = (current_phase, green_start)
+            self._last_phase[agent] = current_phase
+
+    def get_phase_start_log(self) -> Dict[str, Dict[int, List[float]]]:
+        return copy.deepcopy(self._phase_start_log)
+
+    def get_phase_service_intervals(self, include_unserved: bool = True) -> Dict[str, Dict[int, List[float]]]:
+        intervals: Dict[str, Dict[int, List[float]]] = {}
+        fallback = float(getattr(C, "PHASE_UNSERVED_INTERVAL", self.num_seconds))
+        for agent in self.agent_ids:
+            phase_count = self._phase_count.get(agent, self.action_dim)
+            intervals[agent] = {}
+            for phase in range(phase_count):
+                starts = sorted(self._phase_start_log.get(agent, {}).get(phase, []))
+                diffs = [float(starts[i + 1] - starts[i]) for i in range(len(starts) - 1)]
+                if include_unserved and not diffs:
+                    diffs = [fallback]
+                intervals[agent][phase] = diffs
+        return intervals
+
+    def get_phase_service_summary(self) -> Dict[str, float]:
+        intervals = self.get_phase_service_intervals(include_unserved=True)
+        intra_by_agent, theil_intra, max_interval = phase_service_theil_from_intervals(
+            intervals, self.agent_ids, eps=C.THEIL_EPS
+        )
+        mean_interval = 0.0
+        flat = [
+            interval
+            for phase_map in intervals.values()
+            for phase_intervals in phase_map.values()
+            for interval in phase_intervals
+        ]
+        if flat:
+            mean_interval = float(np.mean(flat))
+        return {
+            "theil_intra": float(theil_intra),
+            "max_phase_interval": float(max_interval),
+            "phase_service_mean_interval": float(mean_interval),
+            **{f"theil_intra_{agent}": float(intra_by_agent.get(agent, 0.0)) for agent in self.agent_ids},
+        }
+
+    @staticmethod
+    def _inject_info_metrics(info: dict, metrics: Dict[str, float]):
+        if isinstance(info, dict) and info and all(isinstance(v, dict) for v in info.values()):
+            for per_agent in info.values():
+                per_agent.update(metrics)
+        elif isinstance(info, dict):
+            info.update(metrics)
 
     def close(self):
         if self._par_env is not None:

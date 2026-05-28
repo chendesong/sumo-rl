@@ -1,9 +1,9 @@
-"""Smoke test: random policy for 1 episode, print per-step (R, C_p, C_s)."""
+"""Smoke test: random policy for one episode, print reward and phase intervals."""
 
 import numpy as np
 
-from sumo_env import FairTSCEnv
 import config as C
+from sumo_env import FairTSCEnv
 
 
 def main():
@@ -23,31 +23,26 @@ def main():
 
     rng = np.random.default_rng(42)
     obs = env.reset(seed=42)
-
-    total_R = {a: 0.0 for a in env.agent_ids}
-    total_Cp = {a: 0.0 for a in env.agent_ids}
-    total_Cs = {a: 0.0 for a in env.agent_ids}
+    total_reward = {a: 0.0 for a in env.agent_ids}
 
     step = 0
     done = False
     while not done:
         actions = {a: int(rng.integers(0, env.action_dim)) for a in env.agent_ids}
-        obs, R, Cp, Cs, done, info = env.step(actions)
-
+        obs, reward, _cp, _cs, done, _info = env.step(actions)
         for a in env.agent_ids:
-            total_R[a]  += R[a]
-            total_Cp[a] += Cp[a]
-            total_Cs[a] += Cs[a]
+            total_reward[a] += reward[a]
         step += 1
-
         if step % 100 == 0:
             sample = env.agent_ids[0]
-            print(f"step {step:4d}  agent={sample}  R={R[sample]:+.2f}  C_p={Cp[sample]:.3f}  C_s={Cs[sample]:.2f}")
+            print(f"step {step:4d}  agent={sample}  R={reward[sample]:+.2f}")
 
-    print(f"\nepisode finished after {step} steps\n")
+    summary = env.get_phase_service_summary()
+    print(f"\nepisode finished after {step} steps")
+    print(f"theil_intra        : {summary['theil_intra']:.6f}")
+    print(f"max_phase_interval : {summary['max_phase_interval']:.1f}")
     for a in env.agent_ids:
-        print(f"  {a}:  ΣR = {total_R[a]:>10.1f}   ΣC_p = {total_Cp[a]:>8.3f}   ΣC_s = {total_Cs[a]:>8.1f}")
-
+        print(f"  {a}: sum_R={total_reward[a]:>10.1f}  T_intra={summary.get(f'theil_intra_{a}', 0.0):.6f}")
     env.close()
 
 
