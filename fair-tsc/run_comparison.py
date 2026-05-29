@@ -15,6 +15,11 @@ where G is the realized discounted return from raw env rewards):
                        + G from this rollout.
   - ippo             : 150 train + 1 eval. δ via shared V^UE + G from
                        the eval rollout (IPPO's critic is NOT used).
+  - ma2c             : 150 train + 1 eval. MA2C-style neighbor
+                       observation + policy-fingerprint communication and
+                       spatially discounted cooperative rewards.
+  - colight          : 150 train + 1 eval. CoLight-style graph-attention
+                       actor over neighboring intersection observations.
   - fairsignal       : 150 train + 1 eval using Cai et al.'s
                        intersection-queue Jain-style reward. δ via shared
                        V^UE + G from the eval rollout, with G computed from
@@ -346,6 +351,14 @@ def main():
     print("\n===== ippo (150 episodes) =====")
     from baselines.ippo import train_ippo
     results["ippo"] = _safe_run("ippo", lambda: train_ippo(num_episodes=150, v_ue=v_ue))
+
+    print("\n===== ma2c (150 episodes) =====")
+    from baselines.ma2c import train_ma2c
+    results["ma2c"] = _safe_run("ma2c", lambda: train_ma2c(num_episodes=150, v_ue=v_ue))
+
+    print("\n===== colight (150 episodes) =====")
+    from baselines.colight import train_colight
+    results["colight"] = _safe_run("colight", lambda: train_colight(num_episodes=150, v_ue=v_ue))
 
     print("\n===== fairsignal (150 episodes) =====")
     from baselines.fairsignal import train_fairsignal
