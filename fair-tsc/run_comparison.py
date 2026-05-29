@@ -20,6 +20,9 @@ where G is the realized discounted return from raw env rewards):
                        spatially discounted cooperative rewards.
   - colight          : 150 train + 1 eval. CoLight-style graph-attention
                        actor over neighboring intersection observations.
+  - sociallight      : 150 train + 1 eval. SocialLight-style local
+                       neighborhood Q critic and counterfactual marginal
+                       contribution advantage.
   - fairsignal       : 150 train + 1 eval using Cai et al.'s
                        intersection-queue Jain-style reward. δ via shared
                        V^UE + G from the eval rollout, with G computed from
@@ -359,6 +362,11 @@ def main():
     print("\n===== colight (150 episodes) =====")
     from baselines.colight import train_colight
     results["colight"] = _safe_run("colight", lambda: train_colight(num_episodes=150, v_ue=v_ue))
+
+    print("\n===== sociallight (150 episodes) =====")
+    from baselines.sociallight import train_sociallight
+    results["sociallight"] = _safe_run(
+        "sociallight", lambda: train_sociallight(num_episodes=150, v_ue=v_ue))
 
     print("\n===== fairsignal (150 episodes) =====")
     from baselines.fairsignal import train_fairsignal
