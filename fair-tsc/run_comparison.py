@@ -15,9 +15,10 @@ where G is the realized discounted return from raw env rewards):
                        + G from this rollout.
   - ippo             : 150 train + 1 eval. δ via shared V^UE + G from
                        the eval rollout (IPPO's critic is NOT used).
-  - fairsignal       : 150 train + 1 eval. δ via shared V^UE + G from
-                       the eval rollout, with G computed from the RAW
-                       env reward (NOT the variance-shaped surrogate).
+  - fairsignal       : 150 train + 1 eval using Cai et al.'s
+                       intersection-queue Jain-style reward. δ via shared
+                       V^UE + G from the eval rollout, with G computed from
+                       the RAW env reward (NOT the FairSignal-shaped reward).
   - fair_tsc         : load Fair-TSC ckpt (actor_marl + critic_ue), 1
                        fresh eval. δ via shared V^UE + G from rollout.
                        critic_marl is NOT loaded — not used anymore.

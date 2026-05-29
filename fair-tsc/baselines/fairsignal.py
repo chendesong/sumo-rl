@@ -1,54 +1,28 @@
-"""FairSignal baseline — faithful implementation.
+"""FairSignal baseline, matched to Cai et al. (IEEE IoT-J 2025).
 
-Faithful to:  Raeis & Leon-Garcia, "A Deep Reinforcement Learning Approach
-for Fair Traffic Signal Control", ITSC 2021 (arXiv:2107.10146), §III-A.
-FairSignal (Cai et al., IEEE T-ITS) extends this single-intersection
-delay-based fairness reward to multi-intersection via COMA.  Here we
-adapt the SAME reward to the project's PPO + shared-actor/shared-critic
-backbone — keeps the architecture identical to the IPPO baseline so the
-gap to Fair-TSC is purely the fairness mechanism.
+The FairSignal paper defines fairness over intersections rather than over
+individual vehicles. With q_i(t) denoting the queue length at intersection
+i, its reward is:
 
-──────────────────────────────────────────────────────────────────────
-Reward (Raeis Eq. 4, per intersection i, per decision step t):
+    r_E(t) = - sum_i q_i(t)
+    r_F(t) = - alpha * sum_i q_i(t)^2
+    r(t)   = r_E(t) + r_F(t)
 
-    r_i(t) = - Σ_{n ∈ N_{i,t}}  (1 + α · (2 · d_n(t) − 1))
+This mirrors the denominator of Jain's fairness index over intersection
+traffic conditions: large imbalance in intersection queues receives a
+quadratic penalty.
 
-  N_{i,t}  : vehicles on intersection i's incoming approaches at time t.
-  d_n(t)   : accumulated waiting time of vehicle n up to time t (seconds).
-  α        : fairness/throughput trade-off.  α = 2.0 (paper default).
-
-Why this is "fair":  the expected cumulative reward (Raeis Eq. 6) is
-
-    E[Σ_t r_i(t)] = -E[Σ_n w_n] - α · E[Σ_n w_n²]
-
-The Σw_n² term mirrors the denominator of Jain's fairness index and
-penalises extreme per-vehicle waits — vehicle-level fairness.
-
-──────────────────────────────────────────────────────────────────────
-Difference vs Fair-TSC (the paper's intended contrast):
-
-  - FairSignal/DFC:  vehicle-level fairness via quadratic-in-wait penalty
-                     (per-intersection, absolute, no counterfactual).
-  - Fair-TSC (ours): intersection-level fairness via Theil-T over the
-                     counterfactual sacrifice gap δ = [V^UE − V^MARL]_+.
-
-The two mechanisms answer different fairness questions; the comparison
-plot uses the unified δ formula to put them on the same axis.
-
-──────────────────────────────────────────────────────────────────────
-δ semantics (UNIFIED across all methods):
-
-    δ_i(t) = max( V^UE(s_t, i) − G_t(i), 0 )
-
-G_t(i) uses the RAW env reward, NOT the FairSignal-shaped surrogate.
-The fairness metric must measure true reward space, not the optimiser's
-internal proxy.  FairSignal's own trained critic is NOT used for δ —
-it is kept for reproducibility only.
+Implementation note:
+The paper trains the reward with Advanced-COMA. In this codebase we keep
+the same PPO/shared-network training scaffold used by the other learned
+baselines, but the shaped reward now follows FairSignal Eq. 15/16/18.
+Evaluation still uses the raw environment reward for the unified delta
+metric, so the comparison is not biased by FairSignal's own reward scale.
 """
 
 import os
 import sys
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -68,7 +42,7 @@ from evaluate import (
 )
 
 
-FAIRSIGNAL_ALPHA = 2.0   # Raeis 2021 paper default (Eq. 4); higher α → more fairness weight.
+FAIRSIGNAL_ALPHA = float(os.environ.get("FAIR_TSC_FAIRSIGNAL_ALPHA", "2.0"))
 
 
 def _agent_incoming_lanes(sumo_inner, agent_id) -> List[str]:
@@ -87,62 +61,67 @@ def _agent_incoming_lanes(sumo_inner, agent_id) -> List[str]:
     return []
 
 
-def _vehicle_wait_times_on_lanes(lane_ids: List[str]) -> List[float]:
-    """Query per-vehicle accumulated waiting times on the given lanes.
-
-    Uses traci API (which routes to libsumo because the env sets
-    LIBSUMO_AS_TRACI=1 in os.environ before importing sumo_rl).
-    Returns a flat list of float waiting times, one per vehicle currently
-    on any of the given lanes.
-    """
+def _lane_halting_count(lane_id: str) -> float:
     try:
         import traci
     except ImportError:
-        return []
-    waits: List[float] = []
-    for lane_id in lane_ids:
+        return 0.0
+    try:
+        return float(traci.lane.getLastStepHaltingNumber(lane_id))
+    except Exception:
+        return 0.0
+
+
+def _intersection_queue(sumo_inner, agent_id: str) -> float:
+    """Queue length q_i(t) for FairSignal Eq. 15/16.
+
+    Prefer sumo-rl's raw `get_total_queued` when available. Fall back to
+    summing halting vehicles on incoming lanes.
+    """
+    ts = sumo_inner.traffic_signals.get(agent_id) if hasattr(sumo_inner, "traffic_signals") else None
+    if ts is not None:
         try:
-            veh_ids = traci.lane.getLastStepVehicleIDs(lane_id)
+            return float(ts.get_total_queued())
         except Exception:
-            continue
-        for veh in veh_ids:
-            try:
-                d = float(traci.vehicle.getAccumulatedWaitingTime(veh))
-            except Exception:
-                continue
-            waits.append(d)
-    return waits
+            pass
+    lanes = _agent_incoming_lanes(sumo_inner, agent_id)
+    return float(sum(_lane_halting_count(lane_id) for lane_id in lanes))
 
 
 def compute_fairsignal_rewards(sumo_inner, agent_ids: List[str],
                                 alpha: float = FAIRSIGNAL_ALPHA) -> Dict[str, float]:
-    """FairSignal/DFC reward per intersection (Raeis Eq. 4).
+    """FairSignal global reward broadcast to all intersections.
 
-    r_i = - Σ_{n ∈ N_i}  (1 + α · (2 · d_n − 1))
+    Cai et al. Eq. 15/16/18:
 
-    Scaled by C.REWARD_SCALE for parity with the env's queue-ped reward.
+        r = -sum_i q_i - alpha * sum_i q_i^2
+
+    Scaled by C.REWARD_SCALE for parity with the env rewards.
     """
-    out: Dict[str, float] = {}
-    for a in agent_ids:
-        lanes = _agent_incoming_lanes(sumo_inner, a)
-        waits = _vehicle_wait_times_on_lanes(lanes)
-        if not waits:
-            out[a] = 0.0
-            continue
-        total = sum(1.0 + alpha * (2.0 * d - 1.0) for d in waits)
-        out[a] = -total / C.REWARD_SCALE
-    return out
+    queues = np.asarray([_intersection_queue(sumo_inner, a) for a in agent_ids], dtype=np.float32)
+    reward = -(float(queues.sum()) + float(alpha) * float(np.square(queues).sum()))
+    shaped = reward / C.REWARD_SCALE
+    return {a: shaped for a in agent_ids}
+
+
+def compute_fairsignal_components(sumo_inner, agent_ids: List[str],
+                                  alpha: float = FAIRSIGNAL_ALPHA) -> Tuple[float, float, float]:
+    """Return (efficiency term, fairness term, total), already scaled."""
+    queues = np.asarray([_intersection_queue(sumo_inner, a) for a in agent_ids], dtype=np.float32)
+    r_eff = -float(queues.sum()) / C.REWARD_SCALE
+    r_fair = -float(alpha) * float(np.square(queues).sum()) / C.REWARD_SCALE
+    return r_eff, r_fair, r_eff + r_fair
 
 
 def collect_episode_fairsignal(env, actor, critic, buffer, device, seed=None,
                                 coll: Optional[MetricsCollector] = None,
                                 rollout: Optional[list] = None,
                                 alpha: float = FAIRSIGNAL_ALPHA):
-    """Rollout one episode under FairSignal delay-based reward.
+    """Rollout one episode under FairSignal intersection-queue reward.
 
     Critically:
     - buffer.add receives the FAIRSIGNAL-SHAPED reward (what the policy learns).
-    - rollout records the RAW env reward (what feeds G for the unified δ).
+    - rollout records the RAW env reward (what feeds G for the unified delta).
     - coll receives env info as-is for efficiency / ped_wait metrics.
     """
     obs = env.reset(seed=seed)
@@ -161,8 +140,8 @@ def collect_episode_fairsignal(env, actor, critic, buffer, device, seed=None,
         action_dict = {a: int(action[i].item()) for i, a in enumerate(env.agent_ids)}
         next_obs, R, Cp, Cs, done, info = env.step(action_dict)
 
-        # FairSignal delay-based reward — Raeis Eq. 4, queried from libsumo
-        # AFTER the step (so d_n reflects the post-step waiting times).
+        # FairSignal Eq. 15/16/18, queried after the step so queues reflect
+        # the post-action state.
         r_fairsig = compute_fairsignal_rewards(sumo_inner, env.agent_ids, alpha=alpha)
 
         # RAW env reward vector (for δ / G computation in evaluate.py)
@@ -203,7 +182,7 @@ def train_fairsignal(num_episodes: int = 50, seed: Optional[int] = None,
         num_episodes: training episode count.
         seed:         RNG / env seed.
         v_ue:         pre-loaded shared V^UE.  None → lazy-load on ep 0.
-        alpha:        FairSignal fairness coefficient (Raeis Eq. 4 α).
+        alpha:        FairSignal fairness coefficient in Cai et al. Eq. 18.
         save_critic:  if True, dump trained critic to
                       `<BASE_DIR>/outputs/fairsignal_critic.pt`.
 
@@ -260,6 +239,7 @@ def train_fairsignal(num_episodes: int = 50, seed: Optional[int] = None,
                 "num_episodes":   num_episodes,
                 "seed":           seed,
                 "fairsignal_alpha": alpha,
+                "fairsignal_reward": "r=-sum_i q_i-alpha*sum_i q_i^2",
             }, ckpt_path)
             print(f"[FairSignal] saved trained critic → {ckpt_path}")
 
