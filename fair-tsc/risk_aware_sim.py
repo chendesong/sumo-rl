@@ -551,7 +551,7 @@ def main() -> None:
         raise FileNotFoundError(args.ckpt)
 
     stamp = time.strftime("%Y%m%d_%H%M%S")
-    out_dir = args.out_dir or os.path.join(C.BASE_DIR, "outputs", f"risk_aware_eval_{args.demand}_{stamp}")
+    out_dir = args.out_dir or os.path.join(C.BASE_DIR, "outputs", f"risk_aware_sim_{args.demand}_{stamp}")
     os.makedirs(out_dir, exist_ok=True)
 
     risk_cfg = RiskConfig(
@@ -608,7 +608,7 @@ def main() -> None:
         )
         report["ped_risk_change"] = float(risk.get("ped_risk", 0.0)) - float(base.get("ped_risk", 0.0))
 
-    json_path = os.path.join(out_dir, "risk_aware_eval.json")
+    json_path = os.path.join(out_dir, "risk_aware_sim.json")
     events_path = os.path.join(out_dir, "risk_events.csv")
     write_event_csv(events, events_path)
     report["event_csv"] = events_path
@@ -617,8 +617,8 @@ def main() -> None:
         json.dump(_jsonable(report), f, indent=2, sort_keys=True)
 
     print(json.dumps(_jsonable(report), indent=2, sort_keys=True))
-    print(f"[risk_aware_eval] json={json_path}")
-    print(f"[risk_aware_eval] events={events_path}")
+    print(f"[risk_aware_sim] json={json_path}")
+    print(f"[risk_aware_sim] events={events_path}")
 
 
 if __name__ == "__main__":
