@@ -159,6 +159,18 @@ def disabled_pid_stats(c_fair: float) -> Dict[str, float]:
     }
 
 
+def select_fair_credit(fair: Dict, agent_ids) -> Dict[str, float]:
+    """Return the advantage-level fairness credit for the selected ablation."""
+    if C.FAIR_CREDIT_MODE == "per_agent":
+        return fair["per_agent_cost"]
+    if C.FAIR_CREDIT_MODE == "global":
+        share = float(fair["C_fair"]) / max(len(agent_ids), 1)
+        return {agent: share for agent in agent_ids}
+    if C.FAIR_CREDIT_MODE == "none":
+        return {agent: 0.0 for agent in agent_ids}
+    raise ValueError(f"Unknown FAIR_TSC_CREDIT_MODE={C.FAIR_CREDIT_MODE}")
+
+
 def write_row(writer, base, stats):
     row = dict(base)
     row.update(stats)
@@ -172,6 +184,7 @@ def main():
     print(f"device = {device}")
     print(f"mode = {'Fair-TSC PID' if C.FAIRNESS_ENABLED else 'vanilla MAPPO calibration'}")
     print(f"T_INTER_0={C.T_INTER_0:.6f}  T_INTRA_0={C.T_INTRA_0:.6f}")
+    print(f"fair_credit_mode={C.FAIR_CREDIT_MODE}")
     print(
         f"reward_norm={int(C.REWARD_NORMALIZE)} center={int(C.REWARD_NORM_CENTER)} "
         f"clip={C.REWARD_NORM_CLIP:g}"
@@ -225,6 +238,7 @@ def main():
         "global_step",
         "wall_time_s",
         "fairness_enabled",
+        "fair_credit_mode",
         "reward_mean",
         "reward_min",
         "reward_max",
@@ -314,6 +328,7 @@ def main():
                 "global_step": global_step,
                 "wall_time_s": elapsed,
                 "fairness_enabled": int(C.FAIRNESS_ENABLED),
+                "fair_credit_mode": C.FAIR_CREDIT_MODE,
                 "reward_mean": float(rewards.mean()),
                 "reward_min": float(rewards.min()),
                 "reward_max": float(rewards.max()),
@@ -354,9 +369,11 @@ def main():
 
         if C.FAIRNESS_ENABLED:
             pid_stats = pid.update(fair["C_fair"])
-            apply_fair_advantage(buffer, fair["per_agent_cost"], agent_idx_to_id, pid.lambda_value)
+            fair_credit = select_fair_credit(fair, env.agent_ids)
+            apply_fair_advantage(buffer, fair_credit, agent_idx_to_id, pid.lambda_value)
         else:
             pid_stats = disabled_pid_stats(fair["C_fair"])
+            fair_credit = select_fair_credit(fair, env.agent_ids)
 
         ppo_stats = ppo_update(
             actor=actor_marl,
@@ -398,7 +415,7 @@ def main():
                     "delta_mean": float(delta_agent_mean[i]),
                     "T_inter_i": float(fair["inter_contrib"][i]),
                     "T_intra_i": float(fair["intra_by_agent"].get(agent, 0.0)),
-                    "c_fair_i": float(fair["per_agent_cost"].get(agent, 0.0)),
+                    "c_fair_i": float(fair_credit.get(agent, 0.0)),
                 }
             )
         per_agent_file.flush()
@@ -411,6 +428,7 @@ def main():
                 "global_step": global_step,
                 "wall_time_s": elapsed,
                 "fairness_enabled": int(C.FAIRNESS_ENABLED),
+                "fair_credit_mode": C.FAIR_CREDIT_MODE,
                 "reward_mean": float(rewards.mean()),
                 "reward_min": float(rewards.min()),
                 "reward_max": float(rewards.max()),
@@ -444,6 +462,7 @@ def main():
                     "T_INTER_0": C.T_INTER_0,
                     "T_INTRA_0": C.T_INTRA_0,
                     "FAIR_ALPHA": C.FAIR_ALPHA,
+                    "FAIR_CREDIT_MODE": C.FAIR_CREDIT_MODE,
                     "REWARD_NORMALIZE": C.REWARD_NORMALIZE,
                     "REWARD_NORM_CENTER": C.REWARD_NORM_CENTER,
                     "REWARD_NORM_CLIP": C.REWARD_NORM_CLIP,
@@ -466,6 +485,7 @@ def main():
             "T_INTER_0": C.T_INTER_0,
             "T_INTRA_0": C.T_INTRA_0,
             "FAIR_ALPHA": C.FAIR_ALPHA,
+            "FAIR_CREDIT_MODE": C.FAIR_CREDIT_MODE,
             "REWARD_NORMALIZE": C.REWARD_NORMALIZE,
             "REWARD_NORM_CENTER": C.REWARD_NORM_CENTER,
             "REWARD_NORM_CLIP": C.REWARD_NORM_CLIP,

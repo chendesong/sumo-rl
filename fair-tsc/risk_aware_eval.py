@@ -57,11 +57,13 @@ class RiskEventInjector:
         cfg: RiskConfig,
         seed: int,
         event_plan: Optional[set[Tuple[int, str]]] = None,
+        horizon_seconds: float = C.NUM_SECONDS,
     ):
         self.env = env
         self.cfg = cfg
         self.seed = int(seed)
         self.event_plan = event_plan
+        self.horizon_seconds = float(horizon_seconds)
         self.cooldown_until: Dict[str, float] = {}
         self.events: List[Dict] = []
         self._conflict_lane_cache: Dict[Tuple[str, str], List[str]] = {}
@@ -344,7 +346,7 @@ class RiskEventInjector:
         return {
             "risk_events": int(self.num_events),
             "risk_vehicle_slowdowns": int(self.num_vehicle_slowdowns),
-            "risk_events_per_hour": float(self.num_events) * 3600.0 / max(float(C.NUM_SECONDS), 1.0),
+            "risk_events_per_hour": float(self.num_events) * 3600.0 / max(self.horizon_seconds, 1.0),
             "risk_slowdowns_per_event": (
                 float(self.num_vehicle_slowdowns) / float(self.num_events)
                 if self.num_events
@@ -415,6 +417,7 @@ def run_policy_episode(
     risk_cfg: Optional[RiskConfig] = None,
     actor_key: str = "actor_marl",
     event_plan: Optional[set[Tuple[int, str]]] = None,
+    num_seconds: Optional[int] = None,
 ) -> Dict:
     """Run one deterministic policy rollout, optionally with risk injection."""
     import torch
@@ -424,11 +427,21 @@ def run_policy_episode(
         net_file=C.NET_FILE,
         route_file=route_file,
         out_csv_name=None,
-        num_seconds=C.NUM_SECONDS,
+        num_seconds=int(num_seconds or C.NUM_SECONDS),
         delta_time=C.DELTA_TIME,
         min_green=C.MIN_GREEN,
     )
-    injector = RiskEventInjector(env, risk_cfg, seed=seed, event_plan=event_plan) if risk_cfg else None
+    injector = (
+        RiskEventInjector(
+            env,
+            risk_cfg,
+            seed=seed,
+            event_plan=event_plan,
+            horizon_seconds=int(num_seconds or C.NUM_SECONDS),
+        )
+        if risk_cfg
+        else None
+    )
 
     try:
         obs = env.reset(seed=seed)
@@ -467,6 +480,7 @@ def run_policy_episode(
         result["ckpt_path"] = ckpt_path
         result["route_file"] = route_file
         result["seed"] = seed
+        result["num_seconds"] = int(num_seconds or C.NUM_SECONDS)
         result["risk_enabled"] = bool(risk_cfg)
         result["event_plan_replay"] = bool(event_plan)
         if injector is not None:
@@ -506,6 +520,7 @@ def main() -> None:
     parser.add_argument("--route-file", default=None, help="Override route file")
     parser.add_argument("--seed", type=int, default=C.SEED)
     parser.add_argument("--actor-key", default="actor_marl")
+    parser.add_argument("--num-seconds", type=int, default=C.NUM_SECONDS)
     parser.add_argument("--risk-only", action="store_true")
     parser.add_argument("--hazard-multiplier", type=float, default=1.0)
     parser.add_argument(
@@ -555,6 +570,7 @@ def main() -> None:
         "route_file": route_file,
         "ckpt": args.ckpt,
         "seed": args.seed,
+        "num_seconds": args.num_seconds,
         "risk_config": asdict(risk_cfg),
         "common_random_field": "seed+time_step+crossing_id",
         "event_plan_in": os.path.abspath(args.event_plan_in) if args.event_plan_in else None,
@@ -569,6 +585,7 @@ def main() -> None:
             seed=args.seed,
             risk_cfg=None,
             actor_key=args.actor_key,
+            num_seconds=args.num_seconds,
         )
 
     risk = run_policy_episode(
@@ -578,6 +595,7 @@ def main() -> None:
         risk_cfg=risk_cfg,
         actor_key=args.actor_key,
         event_plan=event_plan,
+        num_seconds=args.num_seconds,
     )
     events = list(risk.pop("_risk_events", []))
     report["risk_aware"] = risk

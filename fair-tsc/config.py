@@ -62,6 +62,9 @@ REWARD_NORM_EPS = 1e-8
 
 # Dual-level fairness and PID adaptive penalty
 FAIR_ALPHA = float(os.environ.get("FAIR_TSC_ALPHA", "0.5"))
+FAIR_CREDIT_MODE = os.environ.get("FAIR_TSC_CREDIT_MODE", "per_agent").lower()
+if FAIR_CREDIT_MODE not in {"per_agent", "global", "none"}:
+    raise ValueError("FAIR_TSC_CREDIT_MODE must be one of: per_agent, global, none")
 
 # Placeholders for calibration. Run vanilla MAPPO with
 # FAIRNESS_ENABLED=False, then replace these with the final-episode means.
