@@ -26,7 +26,9 @@ else:
 
 
 # Network and demand
-DEMAND_LEVEL = "high"            # "low" / "medium" / "high"
+DEMAND_LEVEL = os.environ.get("FAIR_TSC_DEMAND", "high").lower()
+if DEMAND_LEVEL not in {"low", "medium", "high"}:
+    raise ValueError("FAIR_TSC_DEMAND must be one of: low, medium, high")
 NET_FILE = os.path.join(BASE_DIR, "nets/4x4grid/4x4.net.xml")
 ROUTE_FILE = os.path.join(BASE_DIR, f"nets/4x4grid/4x4_{DEMAND_LEVEL}.rou.xml")
 
@@ -43,9 +45,9 @@ CKPT_DIR = os.path.join(BASE_DIR, "checkpoints", RUN_NAME)
 
 
 # SUMO simulation
-NUM_SECONDS = 3600
-DELTA_TIME = 5
-MIN_GREEN = 5
+NUM_SECONDS = int(os.environ.get("FAIR_TSC_NUM_SECONDS", "3600"))
+DELTA_TIME = int(os.environ.get("FAIR_TSC_DELTA_TIME", "5"))
+MIN_GREEN = int(os.environ.get("FAIR_TSC_MIN_GREEN", "5"))
 USE_GUI = False
 LIBSUMO = True
 STEPS_PER_EPISODE = NUM_SECONDS // DELTA_TIME
@@ -87,9 +89,9 @@ PHASE_UNSERVED_INTERVAL = NUM_SECONDS
 
 
 # Training schedule
-T_WARM = 7200
-TOTAL_STEPS = 300_000
-ROLLOUT_LENGTH = 720
+T_WARM = int(os.environ.get("FAIR_TSC_T_WARM", "7200"))
+TOTAL_STEPS = int(os.environ.get("FAIR_TSC_TOTAL_STEPS", "300000"))
+ROLLOUT_LENGTH = int(os.environ.get("FAIR_TSC_ROLLOUT_LENGTH", "720"))
 PPO_EPOCHS = 10
 MINIBATCH_SIZE = 512
 BATCH_SIZE = ROLLOUT_LENGTH * 16
