@@ -31,6 +31,7 @@ from evaluate import (
     load_shared_ue_critic,
 )
 from networks import SharedActor
+from safety_eval import make_fcd_sumo_cmd, parse_fcd_vehicle_count
 from sumo_env import FairTSCEnv
 
 
@@ -410,6 +411,18 @@ def _jsonable(obj):
     return obj
 
 
+def _resolve_fcd_output(base_path: Optional[str], label: str) -> Optional[str]:
+    """Resolve one FCD path per rollout for external SSAM processing."""
+    if not base_path:
+        return None
+    expanded = os.path.abspath(os.path.expanduser(base_path))
+    root, ext = os.path.splitext(expanded)
+    if ext.lower() == ".xml":
+        return f"{root}_{label}{ext}"
+    os.makedirs(expanded, exist_ok=True)
+    return os.path.join(expanded, f"{label}.fcd.xml")
+
+
 def run_policy_episode(
     ckpt_path: str,
     route_file: str,
@@ -418,6 +431,7 @@ def run_policy_episode(
     actor_key: str = "actor_marl",
     event_plan: Optional[set[Tuple[int, str]]] = None,
     num_seconds: Optional[int] = None,
+    additional_sumo_cmd: Optional[str] = None,
 ) -> Dict:
     """Run one deterministic policy rollout, optionally with risk injection."""
     import torch
@@ -430,6 +444,7 @@ def run_policy_episode(
         num_seconds=int(num_seconds or C.NUM_SECONDS),
         delta_time=C.DELTA_TIME,
         min_green=C.MIN_GREEN,
+        additional_sumo_cmd=additional_sumo_cmd,
     )
     injector = (
         RiskEventInjector(
@@ -541,6 +556,15 @@ def main() -> None:
         default=None,
         help="Replay a prior risk_events.csv schedule instead of sampling events.",
     )
+    parser.add_argument(
+        "--fcd-output",
+        default=None,
+        help=(
+            "Export SUMO FCD trajectories for external SSAM. If this is an .xml path, "
+            "the script writes *_baseline.xml and *_risk_aware.xml; otherwise it is "
+            "treated as a directory containing baseline.fcd.xml and risk_aware.fcd.xml."
+        ),
+    )
     parser.add_argument("--out-dir", default=None)
     args = parser.parse_args()
 
@@ -553,6 +577,8 @@ def main() -> None:
     stamp = time.strftime("%Y%m%d_%H%M%S")
     out_dir = args.out_dir or os.path.join(C.BASE_DIR, "outputs", f"risk_aware_sim_{args.demand}_{stamp}")
     os.makedirs(out_dir, exist_ok=True)
+    baseline_fcd = _resolve_fcd_output(args.fcd_output, "baseline")
+    risk_fcd = _resolve_fcd_output(args.fcd_output, "risk_aware")
 
     risk_cfg = RiskConfig(
         hazard_multiplier=args.event_scale if args.event_scale is not None else args.hazard_multiplier,
@@ -574,6 +600,7 @@ def main() -> None:
         "risk_config": asdict(risk_cfg),
         "common_random_field": "seed+time_step+crossing_id",
         "event_plan_in": os.path.abspath(args.event_plan_in) if args.event_plan_in else None,
+        "ssam_note": "FCD trajectories are exported here; SSAM conflict counts are computed post-hoc.",
     }
 
     event_plan = read_event_plan(args.event_plan_in, delta_time=C.DELTA_TIME) if args.event_plan_in else None
@@ -586,7 +613,11 @@ def main() -> None:
             risk_cfg=None,
             actor_key=args.actor_key,
             num_seconds=args.num_seconds,
+            additional_sumo_cmd=make_fcd_sumo_cmd(baseline_fcd) if baseline_fcd else None,
         )
+        if baseline_fcd:
+            report["baseline"]["fcd_output"] = baseline_fcd
+            report["baseline"]["fcd_vehicle_count"] = parse_fcd_vehicle_count(baseline_fcd)
 
     risk = run_policy_episode(
         ckpt_path=args.ckpt,
@@ -596,8 +627,12 @@ def main() -> None:
         actor_key=args.actor_key,
         event_plan=event_plan,
         num_seconds=args.num_seconds,
+        additional_sumo_cmd=make_fcd_sumo_cmd(risk_fcd) if risk_fcd else None,
     )
     events = list(risk.pop("_risk_events", []))
+    if risk_fcd:
+        risk["fcd_output"] = risk_fcd
+        risk["fcd_vehicle_count"] = parse_fcd_vehicle_count(risk_fcd)
     report["risk_aware"] = risk
 
     if "baseline" in report:
