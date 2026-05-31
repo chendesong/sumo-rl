@@ -53,9 +53,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config as C
 from evaluate import (
     MetricsCollector,
+    attach_tripinfo_metrics,
     compute_deltas_from_rollout,
     evaluate_run,
     load_shared_ue_critic,
+    make_tripinfo_sumo_cmd,
 )
 from safety_eval import normalize_pedestrian_risk
 
@@ -164,6 +166,9 @@ def harvest_fair_tsc_metrics(run_dir: str = None, last_n: int = 20) -> Dict:
         "theil_intra": theil_intra,
         "max_phase_interval": max_phase_interval,
         "efficiency":  efficiency,
+        "efficiency_metric": "training_reward_mean",
+        "queue_efficiency": float("nan"),
+        "reward_efficiency": efficiency,
         "ped_wait":    ped_wait,
         "ped_risk":    ped_risk,
         "ped_expected_violations": ped_expected,
@@ -331,6 +336,18 @@ def _fmt_num(v, fmt: str) -> str:
     return str(v)
 
 
+def _tripinfo_path(out_dir: str, method: str) -> str:
+    return os.path.join(out_dir, "tripinfo", f"{method}.tripinfo.xml")
+
+
+def _run_with_tripinfo(out_dir: str, method: str, fn) -> Dict:
+    tripinfo_path = _tripinfo_path(out_dir, method)
+    cmd = make_tripinfo_sumo_cmd(tripinfo_path)
+    result = fn(cmd)
+    attach_tripinfo_metrics(result, tripinfo_path, horizon_s=C.NUM_SECONDS)
+    return result
+
+
 def main():
     out_dir = os.path.join(C.BASE_DIR, "outputs", "comparison_preliminary")
     os.makedirs(out_dir, exist_ok=True)
@@ -345,40 +362,58 @@ def main():
 
     print("\n===== fixed_time =====")
     from baselines.fixed_time import main as run_fixed
-    results["fixed_time"] = _safe_run("fixed_time", lambda: run_fixed(v_ue=v_ue))
+    results["fixed_time"] = _safe_run(
+        "fixed_time",
+        lambda: _run_with_tripinfo(out_dir, "fixed_time", lambda cmd: run_fixed(v_ue=v_ue, additional_sumo_cmd=cmd)),
+    )
 
     print("\n===== max_pressure =====")
     from baselines.max_pressure import main as run_mp
-    results["max_pressure"] = _safe_run("max_pressure", lambda: run_mp(v_ue=v_ue))
+    results["max_pressure"] = _safe_run(
+        "max_pressure",
+        lambda: _run_with_tripinfo(out_dir, "max_pressure", lambda cmd: run_mp(v_ue=v_ue, additional_sumo_cmd=cmd)),
+    )
 
     print("\n===== ippo (150 episodes) =====")
     from baselines.ippo import train_ippo
-    results["ippo"] = _safe_run("ippo", lambda: train_ippo(num_episodes=150, v_ue=v_ue))
+    results["ippo"] = _safe_run(
+        "ippo",
+        lambda: _run_with_tripinfo(out_dir, "ippo", lambda cmd: train_ippo(num_episodes=150, v_ue=v_ue, additional_sumo_cmd=cmd)),
+    )
 
     print("\n===== ma2c (150 episodes) =====")
     from baselines.ma2c import train_ma2c
-    results["ma2c"] = _safe_run("ma2c", lambda: train_ma2c(num_episodes=150, v_ue=v_ue))
+    results["ma2c"] = _safe_run(
+        "ma2c",
+        lambda: _run_with_tripinfo(out_dir, "ma2c", lambda cmd: train_ma2c(num_episodes=150, v_ue=v_ue, additional_sumo_cmd=cmd)),
+    )
 
     print("\n===== colight (150 episodes) =====")
     from baselines.colight import train_colight
-    results["colight"] = _safe_run("colight", lambda: train_colight(num_episodes=150, v_ue=v_ue))
+    results["colight"] = _safe_run(
+        "colight",
+        lambda: _run_with_tripinfo(out_dir, "colight", lambda cmd: train_colight(num_episodes=150, v_ue=v_ue, additional_sumo_cmd=cmd)),
+    )
 
     print("\n===== sociallight (150 episodes) =====")
     from baselines.sociallight import train_sociallight
     results["sociallight"] = _safe_run(
-        "sociallight", lambda: train_sociallight(num_episodes=150, v_ue=v_ue))
+        "sociallight",
+        lambda: _run_with_tripinfo(out_dir, "sociallight", lambda cmd: train_sociallight(num_episodes=150, v_ue=v_ue, additional_sumo_cmd=cmd)),
+    )
 
     print("\n===== fairsignal (150 episodes) =====")
     from baselines.fairsignal import train_fairsignal
     results["fairsignal"] = _safe_run(
-        "fairsignal", lambda: train_fairsignal(num_episodes=150, v_ue=v_ue))
+        "fairsignal",
+        lambda: _run_with_tripinfo(out_dir, "fairsignal", lambda cmd: train_fairsignal(num_episodes=150, v_ue=v_ue, additional_sumo_cmd=cmd)),
+    )
 
     print("\n===== fair_tsc (fresh 1-ep eval with trained ckpt) =====")
-    results["fair_tsc"] = _safe_run("fair_tsc", lambda: fair_tsc_fresh_eval())
-
-    print("\n===== fair_tsc_csv_avg (last-N stage-2 avg from train_log.csv) =====")
-    results["fair_tsc_csv_avg"] = _safe_run("fair_tsc_csv_avg",
-                                            lambda: harvest_fair_tsc_metrics())
+    results["fair_tsc"] = _safe_run(
+        "fair_tsc",
+        lambda: _run_with_tripinfo(out_dir, "fair_tsc", lambda cmd: fair_tsc_fresh_eval(additional_sumo_cmd=cmd)),
+    )
 
     # ── Dump comparison csv ────────────────────────────────────────
     fields = [
@@ -388,6 +423,17 @@ def main():
         "theil_intra",
         "max_phase_interval",
         "efficiency",
+        "efficiency_metric",
+        "queue_efficiency",
+        "reward_efficiency",
+        "completed_vehicles",
+        "throughput_veh_per_hour",
+        "total_travel_time_s",
+        "mean_travel_time_s",
+        "total_vehicle_waiting_time_s",
+        "mean_vehicle_waiting_time_s",
+        "total_time_loss_s",
+        "mean_time_loss_s",
         "ped_wait",
         "ped_risk",
         "ped_expected_violations",
@@ -405,6 +451,17 @@ def main():
                 "theil_intra": r.get("theil_intra"),
                 "max_phase_interval": r.get("max_phase_interval"),
                 "efficiency":  r.get("efficiency"),
+                "efficiency_metric": r.get("efficiency_metric"),
+                "queue_efficiency": r.get("queue_efficiency"),
+                "reward_efficiency": r.get("reward_efficiency"),
+                "completed_vehicles": r.get("completed_vehicles"),
+                "throughput_veh_per_hour": r.get("throughput_veh_per_hour"),
+                "total_travel_time_s": r.get("total_travel_time_s"),
+                "mean_travel_time_s": r.get("mean_travel_time_s"),
+                "total_vehicle_waiting_time_s": r.get("total_vehicle_waiting_time_s"),
+                "mean_vehicle_waiting_time_s": r.get("mean_vehicle_waiting_time_s"),
+                "total_time_loss_s": r.get("total_time_loss_s"),
+                "mean_time_loss_s": r.get("mean_time_loss_s"),
                 "ped_wait":    r.get("ped_wait"),
                 "ped_risk":    r.get("ped_risk"),
                 "ped_expected_violations": r.get("ped_expected_violations"),

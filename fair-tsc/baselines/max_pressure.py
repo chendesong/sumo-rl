@@ -135,13 +135,14 @@ def run_max_pressure_episode(env: FairTSCEnv, seed: int = 0, v_ue=None) -> Dict:
     return evaluate_run(deltas_TN, env_metrics, delta_valid=True)
 
 
-def main(v_ue=None, **_unused):
+def main(v_ue=None, additional_sumo_cmd: Optional[str] = None, **_unused):
     """Entry point. `v_ue` may be a pre-loaded shared SharedCritic.
     Ignores legacy kwargs (e.g. v_ue_fn=)."""
     env = FairTSCEnv(
         net_file=C.NET_FILE, route_file=C.ROUTE_FILE,
         out_csv_name=None,
         num_seconds=C.NUM_SECONDS, delta_time=C.DELTA_TIME, min_green=C.MIN_GREEN,
+        additional_sumo_cmd=additional_sumo_cmd,
     )
     try:
         result = run_max_pressure_episode(env, seed=C.SEED, v_ue=v_ue)

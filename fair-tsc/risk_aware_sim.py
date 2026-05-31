@@ -26,9 +26,12 @@ import numpy as np
 import config as C
 from evaluate import (
     MetricsCollector,
+    attach_tripinfo_metrics,
     compute_deltas_from_rollout,
     evaluate_run,
     load_shared_ue_critic,
+    make_tripinfo_sumo_cmd,
+    merge_sumo_cmds,
 )
 from networks import SharedActor
 from safety_eval import make_fcd_sumo_cmd, parse_fcd_vehicle_count
@@ -578,6 +581,8 @@ def main() -> None:
     os.makedirs(out_dir, exist_ok=True)
     baseline_fcd = _resolve_fcd_output(args.fcd_output, "baseline")
     risk_fcd = _resolve_fcd_output(args.fcd_output, "risk_aware")
+    baseline_tripinfo = os.path.join(out_dir, "baseline.tripinfo.xml")
+    risk_tripinfo = os.path.join(out_dir, "risk_aware.tripinfo.xml")
 
     risk_cfg = RiskConfig(
         hazard_multiplier=args.event_scale if args.event_scale is not None else args.hazard_multiplier,
@@ -613,8 +618,12 @@ def main() -> None:
             risk_cfg=None,
             actor_key=args.actor_key,
             num_seconds=args.num_seconds,
-            additional_sumo_cmd=make_fcd_sumo_cmd(baseline_fcd) if baseline_fcd else None,
+            additional_sumo_cmd=merge_sumo_cmds(
+                make_fcd_sumo_cmd(baseline_fcd) if baseline_fcd else None,
+                make_tripinfo_sumo_cmd(baseline_tripinfo),
+            ),
         )
+        attach_tripinfo_metrics(report["baseline"], baseline_tripinfo, horizon_s=args.num_seconds)
         if baseline_fcd:
             report["baseline"]["fcd_output"] = baseline_fcd
             report["baseline"]["fcd_vehicle_count"] = parse_fcd_vehicle_count(baseline_fcd)
@@ -627,9 +636,13 @@ def main() -> None:
         actor_key=args.actor_key,
         event_plan=event_plan,
         num_seconds=args.num_seconds,
-        additional_sumo_cmd=make_fcd_sumo_cmd(risk_fcd) if risk_fcd else None,
+        additional_sumo_cmd=merge_sumo_cmds(
+            make_fcd_sumo_cmd(risk_fcd) if risk_fcd else None,
+            make_tripinfo_sumo_cmd(risk_tripinfo),
+        ),
     )
     events = list(risk.pop("_risk_events", []))
+    attach_tripinfo_metrics(risk, risk_tripinfo, horizon_s=args.num_seconds)
     if risk_fcd:
         risk["fcd_output"] = risk_fcd
         risk["fcd_vehicle_count"] = parse_fcd_vehicle_count(risk_fcd)
@@ -638,9 +651,23 @@ def main() -> None:
     if "baseline" in report:
         base = report["baseline"]
         report["efficiency_loss"] = float(base.get("efficiency", 0.0)) - float(risk.get("efficiency", 0.0))
-        report["waiting_time_increase"] = (
-            -float(risk.get("efficiency", 0.0)) - -float(base.get("efficiency", 0.0))
+        report["travel_time_increase_s"] = (
+            float(risk.get("total_travel_time_s", 0.0)) - float(base.get("total_travel_time_s", 0.0))
         )
+        report["time_loss_increase_s"] = (
+            float(risk.get("total_time_loss_s", 0.0)) - float(base.get("total_time_loss_s", 0.0))
+        )
+        report["vehicle_waiting_time_increase_s"] = (
+            float(risk.get("total_vehicle_waiting_time_s", 0.0))
+            - float(base.get("total_vehicle_waiting_time_s", 0.0))
+        )
+        report["throughput_drop_veh_per_hour"] = (
+            float(base.get("throughput_veh_per_hour", 0.0)) - float(risk.get("throughput_veh_per_hour", 0.0))
+        )
+        report["queue_efficiency_loss"] = (
+            float(base.get("queue_efficiency", 0.0)) - float(risk.get("queue_efficiency", 0.0))
+        )
+        report["waiting_time_increase"] = report["vehicle_waiting_time_increase_s"]
         report["ped_risk_change"] = float(risk.get("ped_risk", 0.0)) - float(base.get("ped_risk", 0.0))
 
     json_path = os.path.join(out_dir, "risk_aware_sim.json")

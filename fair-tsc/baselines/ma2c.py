@@ -127,7 +127,13 @@ def collect_episode_ma2c(
     return ep_R, n_steps
 
 
-def train_ma2c(num_episodes: int = 150, seed: Optional[int] = None, v_ue=None, save_critic: bool = True) -> Dict:
+def train_ma2c(
+    num_episodes: int = 150,
+    seed: Optional[int] = None,
+    v_ue=None,
+    save_critic: bool = True,
+    additional_sumo_cmd: Optional[str] = None,
+) -> Dict:
     if seed is None:
         seed = C.SEED
     torch.manual_seed(seed)
@@ -141,6 +147,7 @@ def train_ma2c(num_episodes: int = 150, seed: Optional[int] = None, v_ue=None, s
         num_seconds=C.NUM_SECONDS,
         delta_time=C.DELTA_TIME,
         min_green=C.MIN_GREEN,
+        additional_sumo_cmd=additional_sumo_cmd,
     )
     try:
         neighbor_map = build_neighbor_map(env.agent_ids)
@@ -207,8 +214,8 @@ def train_ma2c(num_episodes: int = 150, seed: Optional[int] = None, v_ue=None, s
         env.close()
 
 
-def main(v_ue=None, **_unused):
-    return train_ma2c(num_episodes=50, v_ue=v_ue)
+def main(v_ue=None, additional_sumo_cmd: Optional[str] = None, **_unused):
+    return train_ma2c(num_episodes=50, v_ue=v_ue, additional_sumo_cmd=additional_sumo_cmd)
 
 
 if __name__ == "__main__":

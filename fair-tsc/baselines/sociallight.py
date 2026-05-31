@@ -269,7 +269,13 @@ def _actor_update(actor, optim, flat, advantages, minibatch_size: int):
     return {k: float(np.mean(v)) if v else 0.0 for k, v in stats.items()}
 
 
-def train_sociallight(num_episodes: int = 150, seed: Optional[int] = None, v_ue=None, save_critic: bool = True) -> Dict:
+def train_sociallight(
+    num_episodes: int = 150,
+    seed: Optional[int] = None,
+    v_ue=None,
+    save_critic: bool = True,
+    additional_sumo_cmd: Optional[str] = None,
+) -> Dict:
     if seed is None:
         seed = C.SEED
     torch.manual_seed(seed)
@@ -283,6 +289,7 @@ def train_sociallight(num_episodes: int = 150, seed: Optional[int] = None, v_ue=
         num_seconds=C.NUM_SECONDS,
         delta_time=C.DELTA_TIME,
         min_green=C.MIN_GREEN,
+        additional_sumo_cmd=additional_sumo_cmd,
     )
     try:
         neighbor_map = build_neighbor_map(env.agent_ids, max_neighbors=SOCIALLIGHT_MAX_NEIGHBORS)
@@ -345,8 +352,8 @@ def train_sociallight(num_episodes: int = 150, seed: Optional[int] = None, v_ue=
         env.close()
 
 
-def main(v_ue=None, **_unused):
-    return train_sociallight(num_episodes=50, v_ue=v_ue)
+def main(v_ue=None, additional_sumo_cmd: Optional[str] = None, **_unused):
+    return train_sociallight(num_episodes=50, v_ue=v_ue, additional_sumo_cmd=additional_sumo_cmd)
 
 
 if __name__ == "__main__":

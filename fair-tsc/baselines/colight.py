@@ -179,7 +179,13 @@ def collect_episode_colight(
     return ep_R
 
 
-def train_colight(num_episodes: int = 150, seed: Optional[int] = None, v_ue=None, save_actor: bool = True) -> Dict:
+def train_colight(
+    num_episodes: int = 150,
+    seed: Optional[int] = None,
+    v_ue=None,
+    save_actor: bool = True,
+    additional_sumo_cmd: Optional[str] = None,
+) -> Dict:
     if seed is None:
         seed = C.SEED
     torch.manual_seed(seed)
@@ -193,6 +199,7 @@ def train_colight(num_episodes: int = 150, seed: Optional[int] = None, v_ue=None
         num_seconds=C.NUM_SECONDS,
         delta_time=C.DELTA_TIME,
         min_green=C.MIN_GREEN,
+        additional_sumo_cmd=additional_sumo_cmd,
     )
     try:
         neighbor_map = build_neighbor_map(env.agent_ids, max_neighbors=COLIGHT_MAX_NEIGHBORS)
@@ -260,8 +267,8 @@ def train_colight(num_episodes: int = 150, seed: Optional[int] = None, v_ue=None
         env.close()
 
 
-def main(v_ue=None, **_unused):
-    return train_colight(num_episodes=50, v_ue=v_ue)
+def main(v_ue=None, additional_sumo_cmd: Optional[str] = None, **_unused):
+    return train_colight(num_episodes=50, v_ue=v_ue, additional_sumo_cmd=additional_sumo_cmd)
 
 
 if __name__ == "__main__":

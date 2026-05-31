@@ -175,7 +175,8 @@ def collect_episode_fairsignal(env, actor, critic, buffer, device, seed=None,
 def train_fairsignal(num_episodes: int = 50, seed: Optional[int] = None,
                      v_ue=None,
                      alpha: float = FAIRSIGNAL_ALPHA,
-                     save_critic: bool = True) -> Dict:
+                     save_critic: bool = True,
+                     additional_sumo_cmd: Optional[str] = None) -> Dict:
     """Train FairSignal for `num_episodes`, then run one eval.
 
     Args:
@@ -198,6 +199,7 @@ def train_fairsignal(num_episodes: int = 50, seed: Optional[int] = None,
         net_file=C.NET_FILE, route_file=C.ROUTE_FILE,
         out_csv_name=None,
         num_seconds=C.NUM_SECONDS, delta_time=C.DELTA_TIME, min_green=C.MIN_GREEN,
+        additional_sumo_cmd=additional_sumo_cmd,
     )
     try:
         actor  = SharedActor (env.local_obs_dim,  env.num_agents, env.action_dim, C.ACTOR_HIDDEN ).to(device)
@@ -277,8 +279,8 @@ def train_fairsignal(num_episodes: int = 50, seed: Optional[int] = None,
         env.close()
 
 
-def main(v_ue=None, **_unused):
-    return train_fairsignal(num_episodes=50, v_ue=v_ue)
+def main(v_ue=None, additional_sumo_cmd: Optional[str] = None, **_unused):
+    return train_fairsignal(num_episodes=50, v_ue=v_ue, additional_sumo_cmd=additional_sumo_cmd)
 
 
 if __name__ == "__main__":

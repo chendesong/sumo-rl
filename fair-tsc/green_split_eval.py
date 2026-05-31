@@ -14,7 +14,6 @@ import json
 import os
 import sys
 import time
-import xml.etree.ElementTree as ET
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -22,7 +21,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config as C
-from evaluate import MetricsCollector
+from evaluate import MetricsCollector, parse_tripinfo
 from risk_aware_sim import _jsonable, _load_actor
 from sumo_env import FairTSCEnv
 
@@ -50,40 +49,6 @@ def _phase_label(phase: int) -> str:
 
 def _phase_color(phase: int) -> str:
     return PHASE_COLORS.get(int(phase), "#9D9DA1")
-
-
-def parse_tripinfo(path: str, horizon_s: float) -> Dict[str, float]:
-    """Parse SUMO tripinfo output into efficiency metrics."""
-    durations: List[float] = []
-    waiting_times: List[float] = []
-    time_losses: List[float] = []
-
-    if os.path.exists(path) and os.path.getsize(path) > 0:
-        for _event, elem in ET.iterparse(path, events=("end",)):
-            if elem.tag == "tripinfo":
-                for key, store in (
-                    ("duration", durations),
-                    ("waitingTime", waiting_times),
-                    ("timeLoss", time_losses),
-                ):
-                    try:
-                        store.append(float(elem.attrib.get(key, "0")))
-                    except (TypeError, ValueError):
-                        store.append(0.0)
-                elem.clear()
-
-    completed = len(durations)
-    hours = max(float(horizon_s) / 3600.0, 1e-9)
-    return {
-        "completed_vehicles": int(completed),
-        "throughput_veh_per_hour": float(completed / hours),
-        "total_travel_time_s": float(np.sum(durations)) if durations else 0.0,
-        "mean_travel_time_s": float(np.mean(durations)) if durations else 0.0,
-        "total_vehicle_waiting_time_s": float(np.sum(waiting_times)) if waiting_times else 0.0,
-        "mean_vehicle_waiting_time_s": float(np.mean(waiting_times)) if waiting_times else 0.0,
-        "total_time_loss_s": float(np.sum(time_losses)) if time_losses else 0.0,
-        "mean_time_loss_s": float(np.mean(time_losses)) if time_losses else 0.0,
-    }
 
 
 def green_split_from_phase_starts(

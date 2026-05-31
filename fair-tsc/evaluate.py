@@ -45,6 +45,7 @@ Returned keys:
 
 import os
 from typing import Dict, List, Optional
+import xml.etree.ElementTree as ET
 
 import numpy as np
 
@@ -82,6 +83,64 @@ def _safe_mean(seq) -> float:
     if arr.size == 0:
         return 0.0
     return float(arr.mean())
+
+
+def parse_tripinfo(path: str, horizon_s: float) -> Dict[str, float]:
+    """Parse SUMO tripinfo output into episode-level efficiency metrics."""
+    durations = []
+    waiting_times = []
+    time_losses = []
+
+    if path and os.path.exists(path) and os.path.getsize(path) > 0:
+        for _event, elem in ET.iterparse(path, events=("end",)):
+            if elem.tag == "tripinfo":
+                for key, store in (
+                    ("duration", durations),
+                    ("waitingTime", waiting_times),
+                    ("timeLoss", time_losses),
+                ):
+                    try:
+                        store.append(float(elem.attrib.get(key, "0")))
+                    except (TypeError, ValueError):
+                        store.append(0.0)
+                elem.clear()
+
+    completed = len(durations)
+    hours = max(float(horizon_s) / 3600.0, 1e-9)
+    return {
+        "completed_vehicles": int(completed),
+        "throughput_veh_per_hour": float(completed / hours),
+        "total_travel_time_s": float(np.sum(durations)) if durations else 0.0,
+        "mean_travel_time_s": float(np.mean(durations)) if durations else 0.0,
+        "total_vehicle_waiting_time_s": float(np.sum(waiting_times)) if waiting_times else 0.0,
+        "mean_vehicle_waiting_time_s": float(np.mean(waiting_times)) if waiting_times else 0.0,
+        "total_time_loss_s": float(np.sum(time_losses)) if time_losses else 0.0,
+        "mean_time_loss_s": float(np.mean(time_losses)) if time_losses else 0.0,
+    }
+
+
+def make_tripinfo_sumo_cmd(path: str) -> str:
+    """SUMO additional command for episode-level tripinfo output."""
+    path = os.path.abspath(os.path.expanduser(path))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    return f"--tripinfo-output {path}"
+
+
+def merge_sumo_cmds(*cmds: Optional[str]) -> Optional[str]:
+    """Join optional SUMO command fragments while skipping blanks."""
+    parts = [str(cmd).strip() for cmd in cmds if cmd and str(cmd).strip()]
+    return " ".join(parts) if parts else None
+
+
+def attach_tripinfo_metrics(result: Dict, path: str, horizon_s: float) -> Dict:
+    """Attach tripinfo metrics and promote total travel time to efficiency."""
+    trip = parse_tripinfo(path, horizon_s=horizon_s)
+    result.update(trip)
+    result["tripinfo_xml"] = os.path.abspath(os.path.expanduser(path))
+    if trip.get("total_travel_time_s", 0.0) > 0.0:
+        result["efficiency"] = -float(trip["total_travel_time_s"])
+        result["efficiency_metric"] = "negative_total_travel_time_s"
+    return result
 
 
 def evaluate_run(deltas_TN: np.ndarray,
@@ -130,15 +189,22 @@ def evaluate_run(deltas_TN: np.ndarray,
     ema_next = update_ema(ema_state, delta_agent_mean, beta=C.THEIL_EMA_BETA)
     theil_ema = theil_t_index(ema_next, eps=C.THEIL_EPS)
 
-    # Efficiency: prefer negative-mean waiting time (higher = better).
+    # Step-level control metrics. These are useful for training/debugging,
+    # but episode-level reporting should prefer tripinfo travel time when
+    # available via attach_tripinfo_metrics().
     wait_series = env_metrics.get("system_total_waiting_time_series")
     reward_series = env_metrics.get("reward_series")
+    queue_efficiency = -_safe_mean(wait_series) if wait_series else 0.0
+    reward_efficiency = _safe_mean(reward_series) if reward_series else 0.0
     if wait_series:
-        efficiency = -_safe_mean(wait_series)
+        efficiency = queue_efficiency
+        efficiency_metric = "negative_mean_system_waiting_time"
     elif reward_series:
-        efficiency = _safe_mean(reward_series)
+        efficiency = reward_efficiency
+        efficiency_metric = "mean_reward"
     else:
         efficiency = 0.0
+        efficiency_metric = "none"
 
     ped_wait = _safe_mean(env_metrics.get("agents_total_ped_waiting_time_series"))
     ped_expected = _safe_mean(env_metrics.get("agents_total_expected_violations_series"))
@@ -166,6 +232,9 @@ def evaluate_run(deltas_TN: np.ndarray,
         "theil_intra": float(theil_intra),
         "max_phase_interval": float(max_phase_interval),
         "efficiency":  float(efficiency),
+        "efficiency_metric": efficiency_metric,
+        "queue_efficiency": float(queue_efficiency),
+        "reward_efficiency": float(reward_efficiency),
         "ped_wait":    float(ped_wait),
         "ped_risk":    float(ped_risk),
         "ped_expected_violations": float(ped_expected),
