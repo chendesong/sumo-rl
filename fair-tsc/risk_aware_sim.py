@@ -47,6 +47,7 @@ class RiskConfig:
     stop_buffer_m: float = 2.0
     min_brake_speed_mps: float = 0.5
     max_vehicles_per_event: int = 4
+    disruption_duration_s: float = 5.0
 
 
 class RiskEventInjector:
@@ -213,24 +214,16 @@ class RiskEventInjector:
         return affected
 
     def _brake_command(self, speed: float, dist_to_stop: float) -> Optional[Tuple[float, float, float]]:
-        """Compute a distance-aware comfortable braking command."""
+        """Compute a fixed disruption command for violation-induced blockage."""
         speed = max(float(speed), 0.0)
         if speed < self.cfg.min_brake_speed_mps:
             return None
         decel = max(float(self.cfg.comfort_decel_mps2), 1e-6)
-        available = max(float(dist_to_stop) - float(self.cfg.stop_buffer_m), 0.0)
-        stopping_distance = speed * speed / (2.0 * decel)
-
-        if available >= stopping_distance:
-            target_speed = 0.0
-            duration = speed / decel
-        else:
-            duration = available / max(speed, 1e-6)
-            target_speed = max(speed - decel * duration, 0.0)
-
-        if duration <= 1e-6 or target_speed >= speed:
+        duration = max(float(self.cfg.disruption_duration_s), 1e-3)
+        target_speed = 0.0
+        if duration <= 1e-6:
             return None
-        return target_speed, max(duration, 1e-3), decel
+        return target_speed, duration, decel
 
     def _conflict_lanes_for_crossing(self, ts, crossing_id: str) -> List[str]:
         key = (str(ts.id), str(crossing_id))
@@ -552,6 +545,12 @@ def main() -> None:
     parser.add_argument("--min-brake-speed-mps", type=float, default=0.5)
     parser.add_argument("--max-vehicles-per-event", type=int, default=4)
     parser.add_argument(
+        "--disruption-duration-s",
+        type=float,
+        default=5.0,
+        help="Duration used by slowDown(..., 0, duration) after each violation event.",
+    )
+    parser.add_argument(
         "--event-plan-in",
         default=None,
         help="Replay a prior risk_events.csv schedule instead of sampling events.",
@@ -589,6 +588,7 @@ def main() -> None:
         stop_buffer_m=args.stop_buffer_m,
         min_brake_speed_mps=args.min_brake_speed_mps,
         max_vehicles_per_event=args.max_vehicles_per_event,
+        disruption_duration_s=args.disruption_duration_s,
     )
 
     report: Dict = {
