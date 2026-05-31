@@ -236,6 +236,21 @@ def run(args: argparse.Namespace) -> Dict:
             "mean_expected_ped_violations": float(np.mean(env_metrics.get("agents_total_expected_violations_series", [0.0]))),
         }
     )
+    for key in (
+        "departed_total",
+        "arrived_total",
+        "loaded_total",
+        "teleported_total",
+        "active_vehicle_count_end",
+        "pending_vehicle_count_end",
+        "min_expected_number_end",
+        "total_vehicle_demand",
+        "unfinished_vehicle_demand",
+        "completion_rate_departed",
+        "completion_rate_demand",
+    ):
+        if key in env_metrics:
+            efficiency[key] = env_metrics[key]
 
     plot_paths = save_plots(out_dir, per_agent_rows, network_rows)
     summary = {

@@ -119,6 +119,41 @@ def parse_tripinfo(path: str, horizon_s: float) -> Dict[str, float]:
     }
 
 
+def parse_route_vehicle_demand(path: str, horizon_s: float) -> float:
+    """Estimate total vehicle demand from explicit vehicles/trips and flows."""
+    if not path or not os.path.exists(path):
+        return 0.0
+    total = 0.0
+    for _event, elem in ET.iterparse(path, events=("end",)):
+        tag = elem.tag
+        if tag in {"vehicle", "trip"}:
+            total += 1.0
+        elif tag == "flow":
+            attrs = elem.attrib
+            begin = float(attrs.get("begin", 0.0) or 0.0)
+            end = float(attrs.get("end", horizon_s) or horizon_s)
+            duration = max(min(end, float(horizon_s)) - max(begin, 0.0), 0.0)
+            if attrs.get("number") not in (None, ""):
+                try:
+                    total += float(attrs["number"])
+                except ValueError:
+                    pass
+            elif attrs.get("vehsPerHour") not in (None, "") or attrs.get("perHour") not in (None, ""):
+                rate = attrs.get("vehsPerHour", attrs.get("perHour", "0"))
+                try:
+                    total += float(rate) * duration / 3600.0
+                except ValueError:
+                    pass
+            elif attrs.get("period") not in (None, ""):
+                try:
+                    period = max(float(attrs["period"]), 1e-9)
+                    total += duration / period
+                except ValueError:
+                    pass
+        elem.clear()
+    return float(total)
+
+
 def make_tripinfo_sumo_cmd(path: str) -> str:
     """SUMO additional command for episode-level tripinfo output."""
     path = os.path.abspath(os.path.expanduser(path))
@@ -141,6 +176,13 @@ def attach_tripinfo_metrics(result: Dict, path: str, horizon_s: float) -> Dict:
         result["efficiency"] = -float(trip["total_travel_time_s"])
         result["efficiency_metric"] = "negative_total_travel_time_s"
     return result
+
+
+def _completion_rates(arrived: float, departed: float, demand: float) -> Dict[str, float]:
+    return {
+        "completion_rate_departed": float(arrived / departed) if departed > 0.0 else 0.0,
+        "completion_rate_demand": float(arrived / demand) if demand > 0.0 else 0.0,
+    }
 
 
 def evaluate_run(deltas_TN: np.ndarray,
@@ -238,6 +280,17 @@ def evaluate_run(deltas_TN: np.ndarray,
         "ped_wait":    float(ped_wait),
         "ped_risk":    float(ped_risk),
         "ped_expected_violations": float(ped_expected),
+        "departed_total": float(env_metrics.get("departed_total", 0.0) or 0.0),
+        "arrived_total": float(env_metrics.get("arrived_total", 0.0) or 0.0),
+        "loaded_total": float(env_metrics.get("loaded_total", 0.0) or 0.0),
+        "teleported_total": float(env_metrics.get("teleported_total", 0.0) or 0.0),
+        "active_vehicle_count_end": float(env_metrics.get("active_vehicle_count_end", 0.0) or 0.0),
+        "pending_vehicle_count_end": float(env_metrics.get("pending_vehicle_count_end", 0.0) or 0.0),
+        "min_expected_number_end": float(env_metrics.get("min_expected_number_end", 0.0) or 0.0),
+        "total_vehicle_demand": float(env_metrics.get("total_vehicle_demand", 0.0) or 0.0),
+        "unfinished_vehicle_demand": float(env_metrics.get("unfinished_vehicle_demand", 0.0) or 0.0),
+        "completion_rate_departed": float(env_metrics.get("completion_rate_departed", 0.0) or 0.0),
+        "completion_rate_demand": float(env_metrics.get("completion_rate_demand", 0.0) or 0.0),
         "delta_max":   float(delta_max),
         "delta_mean":  float(delta_mean),
         "delta_valid": bool(delta_valid),
@@ -267,6 +320,13 @@ class MetricsCollector:
         self.ped_expected_series = []
         self.reward_series = []
         self.phase_metrics = {}
+        self.departed_total = 0.0
+        self.arrived_total = 0.0
+        self.loaded_total = 0.0
+        self.teleported_total = 0.0
+        self.last_active_vehicle_count = 0.0
+        self.last_pending_vehicle_count = 0.0
+        self.last_min_expected_number = 0.0
 
     def add(self, info: Dict, mean_reward: float = 0.0):
         # `info` is the PettingZoo per-agent info dict (any agent has the
@@ -280,6 +340,16 @@ class MetricsCollector:
             self.wait_series.append(float(probe.get("system_total_waiting_time", 0.0)))
             self.ped_wait_series.append(float(probe.get("agents_total_ped_waiting_time", 0.0)))
             self.ped_expected_series.append(float(probe.get("agents_total_expected_violations", 0.0)))
+            self.departed_total += float(probe.get("simulation_departed_number", 0.0) or 0.0)
+            self.arrived_total += float(probe.get("simulation_arrived_number", 0.0) or 0.0)
+            self.loaded_total += float(probe.get("simulation_loaded_number", 0.0) or 0.0)
+            self.last_active_vehicle_count = float(probe.get("simulation_active_vehicle_count", 0.0) or 0.0)
+            self.last_pending_vehicle_count = float(probe.get("simulation_pending_vehicle_count", 0.0) or 0.0)
+            self.last_min_expected_number = float(probe.get("simulation_min_expected_number", 0.0) or 0.0)
+            self.teleported_total = max(
+                self.teleported_total,
+                float(probe.get("simulation_teleported_total_env", 0.0) or 0.0),
+            )
             for key in ("theil_intra", "max_phase_interval", "phase_service_mean_interval"):
                 if key in probe:
                     self.phase_metrics[key] = float(probe.get(key, 0.0))
@@ -298,10 +368,53 @@ class MetricsCollector:
         out["ped_risk"] = normalize_pedestrian_risk(_safe_mean(self.ped_expected_series), num_agents=num_agents)
         if env is not None:
             try:
+                sim_metrics = env.get_simulation_progress_metrics()
+                self.last_active_vehicle_count = float(
+                    sim_metrics.get("simulation_active_vehicle_count", self.last_active_vehicle_count)
+                )
+                self.last_pending_vehicle_count = float(
+                    sim_metrics.get("simulation_pending_vehicle_count", self.last_pending_vehicle_count)
+                )
+                self.last_min_expected_number = float(
+                    sim_metrics.get("simulation_min_expected_number", self.last_min_expected_number)
+                )
+                self.departed_total = max(
+                    self.departed_total,
+                    float(sim_metrics.get("simulation_departed_total_env", self.departed_total)),
+                )
+                self.arrived_total = max(
+                    self.arrived_total,
+                    float(sim_metrics.get("simulation_arrived_total_env", self.arrived_total)),
+                )
+                self.teleported_total = max(
+                    self.teleported_total,
+                    float(sim_metrics.get("simulation_teleported_total_env", self.teleported_total)),
+                )
+            except Exception:
+                pass
+            try:
                 out["phase_service_intervals"] = env.get_phase_service_intervals(include_unserved=True)
                 out.update(env.get_phase_service_summary())
             except Exception:
                 pass
+        route_file = getattr(env, "route_file", None) if env is not None else None
+        horizon_s = float(getattr(env, "num_seconds", getattr(C, "NUM_SECONDS", 0)) or 0.0)
+        demand = parse_route_vehicle_demand(route_file, horizon_s=horizon_s) if route_file else 0.0
+        rates = _completion_rates(self.arrived_total, self.departed_total, demand)
+        out.update(
+            {
+                "departed_total": float(self.departed_total),
+                "arrived_total": float(self.arrived_total),
+                "loaded_total": float(self.loaded_total),
+                "teleported_total": float(self.teleported_total),
+                "active_vehicle_count_end": float(self.last_active_vehicle_count),
+                "pending_vehicle_count_end": float(self.last_pending_vehicle_count),
+                "min_expected_number_end": float(self.last_min_expected_number),
+                "total_vehicle_demand": float(demand),
+                "unfinished_vehicle_demand": float(max(demand - self.arrived_total, 0.0)) if demand else 0.0,
+                **rates,
+            }
+        )
         return out
 
 

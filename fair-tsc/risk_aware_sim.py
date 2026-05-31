@@ -664,6 +664,21 @@ def main() -> None:
         report["throughput_drop_veh_per_hour"] = (
             float(base.get("throughput_veh_per_hour", 0.0)) - float(risk.get("throughput_veh_per_hour", 0.0))
         )
+        report["completion_rate_departed_drop"] = (
+            float(base.get("completion_rate_departed", 0.0)) - float(risk.get("completion_rate_departed", 0.0))
+        )
+        report["completion_rate_demand_drop"] = (
+            float(base.get("completion_rate_demand", 0.0)) - float(risk.get("completion_rate_demand", 0.0))
+        )
+        report["unfinished_vehicle_demand_increase"] = (
+            float(risk.get("unfinished_vehicle_demand", 0.0)) - float(base.get("unfinished_vehicle_demand", 0.0))
+        )
+        report["pending_vehicle_count_increase"] = (
+            float(risk.get("pending_vehicle_count_end", 0.0)) - float(base.get("pending_vehicle_count_end", 0.0))
+        )
+        report["active_vehicle_count_increase"] = (
+            float(risk.get("active_vehicle_count_end", 0.0)) - float(base.get("active_vehicle_count_end", 0.0))
+        )
         report["queue_efficiency_loss"] = (
             float(base.get("queue_efficiency", 0.0)) - float(risk.get("queue_efficiency", 0.0))
         )

@@ -152,6 +152,7 @@ class FairTSCEnv:
         c_s = {a: 0.0 for a in self.agent_ids}
         done_all = all(term_dict.get(a, False) or trunc_dict.get(a, False) for a in self.agent_ids)
 
+        self._inject_info_metrics(info_dict, self.get_simulation_progress_metrics())
         if done_all:
             self._inject_info_metrics(info_dict, self.get_phase_service_summary())
 
@@ -263,6 +264,30 @@ class FairTSCEnv:
             "phase_service_mean_interval": float(mean_interval),
             **{f"theil_intra_{agent}": float(intra_by_agent.get(agent, 0.0)) for agent in self.agent_ids},
         }
+
+    def get_simulation_progress_metrics(self) -> Dict[str, float]:
+        """Return step and terminal SUMO progress counters for evaluation."""
+        metrics: Dict[str, float] = {}
+        try:
+            sumo_env = self._walk_to_sumo_env()
+            sumo = sumo_env.sumo
+            sim = sumo.simulation
+            metrics.update(
+                {
+                    "simulation_departed_number": float(sim.getDepartedNumber()),
+                    "simulation_arrived_number": float(sim.getArrivedNumber()),
+                    "simulation_loaded_number": float(sim.getLoadedNumber()),
+                    "simulation_min_expected_number": float(sim.getMinExpectedNumber()),
+                    "simulation_pending_vehicle_count": float(len(sim.getPendingVehicles())),
+                    "simulation_active_vehicle_count": float(len(sumo.vehicle.getIDList())),
+                    "simulation_departed_total_env": float(getattr(sumo_env, "num_departed_vehicles", 0.0)),
+                    "simulation_arrived_total_env": float(getattr(sumo_env, "num_arrived_vehicles", 0.0)),
+                    "simulation_teleported_total_env": float(getattr(sumo_env, "num_teleported_vehicles", 0.0)),
+                }
+            )
+        except Exception:
+            pass
+        return metrics
 
     @staticmethod
     def _inject_info_metrics(info: dict, metrics: Dict[str, float]):
