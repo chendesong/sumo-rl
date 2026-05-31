@@ -1,5 +1,5 @@
 """
-Generate three route files (low / medium / high demand) for the 4x4 grid net.
+Generate route files for the 4x4 grid net.
 
 Style follows the original 2x2 generate_routes.py:
 - 16 vehicle <flow>s (one per entry edge -> randomly chosen exit edge)
@@ -34,6 +34,13 @@ At "high":  arterial = 750 * 1.5 = 1125 veh/h  (below ~1296 veh/h per-direction
             green-time capacity for a 2-lane edge with 37s green in ~104s cycle),
             local    = 750 * 0.5 = 375 veh/h.
 Network total per level is unchanged from the uniform setting (16 * base).
+
+Ultra-stress demand:
+    The "ultra_stress" file is intentionally not total-demand preserving.  It
+    concentrates demand on the middle two rows and columns, while keeping all
+    outer entries alive at a low rate.  The OD pairs are deterministic
+    corridor/cross-corridor trips through the central 2x2 region, so multiple
+    intersections can become bottlenecks instead of only one or two extremes.
 """
 
 import argparse
@@ -49,6 +56,7 @@ DEMAND = {
     "low":    {"veh": 250,  "ped": 60},
     "medium": {"veh": 500,  "ped": 120},
     "high":   {"veh": 750,  "ped": 180},
+    "ultra_stress": {"veh": 900, "ped": 240},
 }
 
 # ---------------------------------------------------------------------------
@@ -56,6 +64,8 @@ DEMAND = {
 # ---------------------------------------------------------------------------
 ARTERIAL_WEIGHT = 1.5
 LOCAL_WEIGHT    = 0.5
+ULTRA_ARTERIAL_WEIGHT = 2.0
+ULTRA_LOCAL_WEIGHT = 0.25
 
 # Arterial entries: middle 2 rows (r=2,3) for E-W flow + middle 2 cols (c=2,3) for N-S flow
 ARTERIAL_ENTRIES = set()
@@ -67,7 +77,9 @@ for c in (2, 3):
     ARTERIAL_ENTRIES.add(f"v{c}5")   # South entry
 
 
-def entry_weight(entry_edge: str) -> float:
+def entry_weight(entry_edge: str, level: str = "high") -> float:
+    if level == "ultra_stress":
+        return ULTRA_ARTERIAL_WEIGHT if entry_edge in ARTERIAL_ENTRIES else ULTRA_LOCAL_WEIGHT
     return ARTERIAL_WEIGHT if entry_edge in ARTERIAL_ENTRIES else LOCAL_WEIGHT
 
 
@@ -108,14 +120,61 @@ def sample_od(entries, exits, rng):
     return od
 
 
+def ultra_stress_od():
+    """Deterministic OD pairs that stress the central 2x2 intersections.
+
+    The eight arterial entries cross the whole middle rows/columns.  The eight
+    local entries feed into those same corridors, which creates spillback and
+    phase competition around J22, J23, J32, and J33.
+    """
+    veh_od = [
+        ("-h11", "-h35"),  # west local -> east row 3
+        ("-h21", "-h25"),  # west row 2 -> east row 2
+        ("-h31", "-h35"),  # west row 3 -> east row 3
+        ("-h41", "-h25"),  # west local -> east row 2
+        ("h15", "h31"),    # east local -> west row 3
+        ("h25", "h21"),    # east row 2 -> west row 2
+        ("h35", "h31"),    # east row 3 -> west row 3
+        ("h45", "h21"),    # east local -> west row 2
+        ("-v11", "-v35"),  # north local -> south col 3
+        ("-v21", "-v25"),  # north col 2 -> south col 2
+        ("-v31", "-v35"),  # north col 3 -> south col 3
+        ("-v41", "-v25"),  # north local -> south col 2
+        ("v15", "v31"),    # south local -> north col 3
+        ("v25", "v21"),    # south col 2 -> north col 2
+        ("v35", "v31"),    # south col 3 -> north col 3
+        ("v45", "v21"),    # south local -> north col 2
+    ]
+
+    ped_od = [
+        ("-h11", "-v35"),
+        ("-h21", "v21"),
+        ("-h31", "v31"),
+        ("-h41", "-v25"),
+        ("h15", "v31"),
+        ("h25", "-v21"),
+        ("h35", "-v31"),
+        ("h45", "v21"),
+        ("-v11", "-h35"),
+        ("-v21", "h21"),
+        ("-v31", "h31"),
+        ("-v41", "-h25"),
+        ("v15", "h31"),
+        ("v25", "-h21"),
+        ("v35", "-h31"),
+        ("v45", "h21"),
+    ]
+    return veh_od, ped_od
+
+
 # ---------------------------------------------------------------------------
 # Writer
 # ---------------------------------------------------------------------------
 def write_rou(out_dir: str, level: str, veh_od, ped_od) -> str:
     base_v = DEMAND[level]["veh"]
     base_p = DEMAND[level]["ped"]
-    total_v = sum(base_v * entry_weight(e_in) for e_in, _ in veh_od)
-    total_p = sum(base_p * entry_weight(e_in) for e_in, _ in ped_od)
+    total_v = sum(base_v * entry_weight(e_in, level) for e_in, _ in veh_od)
+    total_p = sum(base_p * entry_weight(e_in, level) for e_in, _ in ped_od)
 
     path = os.path.join(out_dir, f"4x4_{level}.rou.xml")
     lines = [
@@ -125,13 +184,13 @@ def write_rou(out_dir: str, level: str, veh_od, ped_od) -> str:
         '<routes>',
         f'    <vType id="{PED_TYPE_ID}" vClass="pedestrian" '
         'impatience="0.0" jmIgnoreFoeProb="0.0" jmDriveAfterRedTime="-1"/>',
-        f'    <!-- demand={level}: arterial weight {ARTERIAL_WEIGHT}, '
-        f'local weight {LOCAL_WEIGHT}, total {int(total_v)} veh/h + '
+        f'    <!-- demand={level}: arterial weight {entry_weight(next(iter(ARTERIAL_ENTRIES)), level)}, '
+        f'local weight {entry_weight("__local__", level)}, total {int(total_v)} veh/h + '
         f'{int(total_p)} ped/h -->',
     ]
 
     for e_in, e_out in veh_od:
-        per_v = base_v * entry_weight(e_in)
+        per_v = base_v * entry_weight(e_in, level)
         lines.append(
             f'    <flow id="f_{e_in}_to_{e_out}" '
             f'begin="{SIM_BEGIN:.2f}" end="{SIM_END:.2f}" '
@@ -140,7 +199,7 @@ def write_rou(out_dir: str, level: str, veh_od, ped_od) -> str:
         )
 
     for e_in, e_out in ped_od:
-        per_p = base_p * entry_weight(e_in)
+        per_p = base_p * entry_weight(e_in, level)
         lines.append(
             f'    <personFlow id="pf_{e_in}_to_{e_out}" '
             f'type="{PED_TYPE_ID}" '
@@ -161,7 +220,9 @@ def write_rou(out_dir: str, level: str, veh_od, ped_od) -> str:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-def main(out_dir: str = ".", seed: int = 42):
+def main(out_dir: str = ".", seed: int = 42, levels=None):
+    if levels is None:
+        levels = ("low", "medium", "high", "ultra_stress")
     os.makedirs(out_dir, exist_ok=True)
     entries, exits = get_entries_exits()
     rng = random.Random(seed)
@@ -175,13 +236,25 @@ def main(out_dir: str = ".", seed: int = 42):
     print(f"Local    entries (weight {LOCAL_WEIGHT}): {sorted(local_entries)}")
     print()
 
-    for level in ("low", "medium", "high"):
-        write_rou(out_dir, level, veh_od, ped_od)
+    for level in levels:
+        if level not in DEMAND:
+            raise ValueError(f"Unknown level {level!r}; choose from {sorted(DEMAND)}")
+        if level == "ultra_stress":
+            level_veh_od, level_ped_od = ultra_stress_od()
+        else:
+            level_veh_od, level_ped_od = veh_od, ped_od
+        write_rou(out_dir, level, level_veh_od, level_ped_od)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--out-dir", default=".", help="Output directory")
     parser.add_argument("--seed", type=int, default=42, help="RNG seed")
+    parser.add_argument(
+        "--levels",
+        nargs="+",
+        default=["low", "medium", "high", "ultra_stress"],
+        help=f"Demand levels to generate. Choices: {', '.join(DEMAND)}",
+    )
     args = parser.parse_args()
-    main(args.out_dir, args.seed)
+    main(args.out_dir, args.seed, args.levels)

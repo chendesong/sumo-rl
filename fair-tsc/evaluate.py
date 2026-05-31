@@ -432,10 +432,10 @@ def _default_fair_tsc_ckpt() -> str:
 
     Resolution order (first hit wins):
       1. env var `FAIR_TSC_CKPT`
-      2. `<BASE_DIR>/checkpoints/fair_tsc_4x4_high_20260517_2359/final.pt`
-      3. newest `ep_*.pt` in that same directory
-      4. newest `final.pt` (else newest `ep_*.pt`) under any
-         `<BASE_DIR>/checkpoints/fair_tsc_4x4_high_*` directory
+      2. newest `final.pt` (else newest `ep_*.pt`) under the current
+         demand's `<BASE_DIR>/checkpoints/fair_tsc_4x4_<demand>_*` directory
+      3. newest `final.pt` (else newest `ep_*.pt`) under any
+         `<BASE_DIR>/checkpoints/fair_tsc_4x4_*` directory
     Raises FileNotFoundError if nothing usable is found.
     """
     import glob
@@ -448,21 +448,14 @@ def _default_fair_tsc_ckpt() -> str:
             )
         return env_path
 
-    canon_dir = os.path.join(
-        C.BASE_DIR, "checkpoints", "fair_tsc_4x4_high_20260517_2359"
-    )
-    canon_final = os.path.join(canon_dir, "final.pt")
-    if os.path.exists(canon_final):
-        return canon_final
-    if os.path.isdir(canon_dir):
-        eps = sorted(glob.glob(os.path.join(canon_dir, "ep_*.pt")))
-        if eps:
-            return eps[-1]
-
-    # Fallback: any matching run directory, newest first.
+    # Prefer the current demand level, then fall back to any Fair-TSC 4x4 run.
     run_dirs = sorted(glob.glob(
-        os.path.join(C.BASE_DIR, "checkpoints", "fair_tsc_4x4_high_*")
+        os.path.join(C.BASE_DIR, "checkpoints", f"fair_tsc_4x4_{C.DEMAND_LEVEL}_*")
     ))
+    if not run_dirs:
+        run_dirs = sorted(glob.glob(
+            os.path.join(C.BASE_DIR, "checkpoints", "fair_tsc_4x4_*")
+        ))
     for d in reversed(run_dirs):
         f = os.path.join(d, "final.pt")
         if os.path.exists(f):
@@ -473,8 +466,8 @@ def _default_fair_tsc_ckpt() -> str:
 
     raise FileNotFoundError(
         "No Fair-TSC checkpoint found. Looked for FAIR_TSC_CKPT env var, "
-        f"{canon_final}, any ep_*.pt under {canon_dir}, and any "
-        f"fair_tsc_4x4_high_*/final.pt (or ep_*.pt) under "
+        f"fair_tsc_4x4_{C.DEMAND_LEVEL}_*/final.pt (or ep_*.pt), and any "
+        f"fair_tsc_4x4_*/final.pt (or ep_*.pt) under "
         f"{os.path.join(C.BASE_DIR, 'checkpoints')}."
     )
 

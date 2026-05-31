@@ -26,9 +26,10 @@ else:
 
 
 # Network and demand
-DEMAND_LEVEL = os.environ.get("FAIR_TSC_DEMAND", "high").lower()
-if DEMAND_LEVEL not in {"low", "medium", "high"}:
-    raise ValueError("FAIR_TSC_DEMAND must be one of: low, medium, high")
+DEMAND_LEVELS = {"low", "medium", "high", "ultra_stress"}
+DEMAND_LEVEL = os.environ.get("FAIR_TSC_DEMAND", "ultra_stress").lower()
+if DEMAND_LEVEL not in DEMAND_LEVELS:
+    raise ValueError(f"FAIR_TSC_DEMAND must be one of: {', '.join(sorted(DEMAND_LEVELS))}")
 NET_FILE = os.path.join(BASE_DIR, "nets/4x4grid/4x4.net.xml")
 ROUTE_FILE = os.path.join(BASE_DIR, f"nets/4x4grid/4x4_{DEMAND_LEVEL}.rou.xml")
 

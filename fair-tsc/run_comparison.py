@@ -68,7 +68,7 @@ from safety_eval import normalize_pedestrian_risk
 
 FAIR_TSC_DEFAULT_RUN = os.environ.get(
     "FAIR_TSC_RUN_DIR",
-    os.path.join(C.BASE_DIR, "outputs", "fair_tsc_4x4_high_20260517_2359"),
+    os.path.join(C.BASE_DIR, "outputs", f"fair_tsc_4x4_{C.DEMAND_LEVEL}_latest"),
 )
 
 
@@ -90,7 +90,9 @@ def harvest_fair_tsc_metrics(run_dir: str = None, last_n: int = 20) -> Dict:
         run_dir = FAIR_TSC_DEFAULT_RUN
     log_path = os.path.join(run_dir, "train_log.csv")
     if not os.path.exists(log_path):
-        cands = sorted(glob.glob(os.path.join(C.BASE_DIR, "outputs", "fair_tsc_4x4_high_*", "train_log.csv")))
+        cands = sorted(glob.glob(os.path.join(C.BASE_DIR, "outputs", f"fair_tsc_4x4_{C.DEMAND_LEVEL}_*", "train_log.csv")))
+        if not cands:
+            cands = sorted(glob.glob(os.path.join(C.BASE_DIR, "outputs", "fair_tsc_4x4_*", "train_log.csv")))
         if not cands:
             raise FileNotFoundError(f"No Fair-TSC train_log.csv found (looked at {log_path})")
         log_path = cands[-1]

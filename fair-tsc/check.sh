@@ -31,14 +31,14 @@ if [ -n "$PIDS" ]; then
 fi
 
 if [ -z "$LATEST" ]; then
-    logs=(~/sumo-rl/outputs/fair_tsc_4x4_high_*/train_log.csv ~/sumo-rl/outputs/mappo_calib_4x4_high_*/train_log.csv)
+    logs=(~/sumo-rl/outputs/fair_tsc_4x4_*/train_log.csv ~/sumo-rl/outputs/mappo_calib_4x4_*/train_log.csv)
     if [ ${#logs[@]} -gt 0 ]; then
         LATEST=$(ls -t "${logs[@]}" 2>/dev/null | head -1)
     fi
 fi
 
 if [ -z "$LATEST" ]; then
-    echo "No train_log.csv found under ~/sumo-rl/outputs/{fair_tsc,mappo_calib}_4x4_high_*"
+    echo "No train_log.csv found under ~/sumo-rl/outputs/{fair_tsc,mappo_calib}_4x4_*"
     exit 1
 fi
 

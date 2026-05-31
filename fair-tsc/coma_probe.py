@@ -182,8 +182,10 @@ def make_env(additional_sumo_cmd: Optional[str] = None) -> FairTSCEnv:
 
 def find_default_ckpt() -> str:
     patterns = [
-        os.path.join(C.BASE_DIR, "checkpoints", "*4x4_high*", "final.pt"),
-        os.path.join(C.BASE_DIR, "checkpoints", "*4x4_high*", "ep_*.pt"),
+        os.path.join(C.BASE_DIR, "checkpoints", f"*4x4_{C.DEMAND_LEVEL}*", "final.pt"),
+        os.path.join(C.BASE_DIR, "checkpoints", f"*4x4_{C.DEMAND_LEVEL}*", "ep_*.pt"),
+        os.path.join(C.BASE_DIR, "checkpoints", "*4x4*", "final.pt"),
+        os.path.join(C.BASE_DIR, "checkpoints", "*4x4*", "ep_*.pt"),
         os.path.join(C.BASE_DIR, "checkpoints", "*", "final.pt"),
         os.path.join(C.BASE_DIR, "checkpoints", "*", "ep_*.pt"),
     ]

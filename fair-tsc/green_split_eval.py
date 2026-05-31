@@ -279,7 +279,7 @@ def run(args: argparse.Namespace) -> Dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt", required=True, help="Checkpoint containing actor_marl")
-    parser.add_argument("--demand", choices=["low", "medium", "high"], default=C.DEMAND_LEVEL)
+    parser.add_argument("--demand", choices=sorted(C.DEMAND_LEVELS), default=C.DEMAND_LEVEL)
     parser.add_argument("--route-file", default=None)
     parser.add_argument("--seed", type=int, default=C.SEED)
     parser.add_argument("--actor-key", default="actor_marl")

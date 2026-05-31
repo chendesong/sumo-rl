@@ -20,10 +20,10 @@ export NUMEXPR_NUM_THREADS="${NUMEXPR_NUM_THREADS:-8}"
 
 export FAIR_TSC_FAIRNESS_ENABLED=1
 export FAIR_TSC_CREDIT_MODE="${FAIR_TSC_CREDIT_MODE:-per_agent}"
-export FAIR_TSC_DEMAND="${FAIR_TSC_DEMAND:-high}"
+export FAIR_TSC_DEMAND="${FAIR_TSC_DEMAND:-ultra_stress}"
 export FAIR_TSC_ALPHA="${FAIR_TSC_ALPHA:-0.5}"
 
-# Vanilla MAPPO calibration refs from the completed high-demand run.
+# Vanilla MAPPO calibration refs from the completed demand run.
 export FAIR_TSC_T_INTER_0="${FAIR_TSC_T_INTER_0:-0.28911206051707267}"
 export FAIR_TSC_T_INTRA_0="${FAIR_TSC_T_INTRA_0:-0.14331125381978083}"
 

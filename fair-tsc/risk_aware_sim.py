@@ -527,7 +527,7 @@ def write_event_csv(events: List[Dict], path: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt", required=True, help="Fair-TSC/MAPPO checkpoint path")
-    parser.add_argument("--demand", choices=["low", "medium", "high"], default=C.DEMAND_LEVEL)
+    parser.add_argument("--demand", choices=sorted(C.DEMAND_LEVELS), default=C.DEMAND_LEVEL)
     parser.add_argument("--route-file", default=None, help="Override route file")
     parser.add_argument("--seed", type=int, default=C.SEED)
     parser.add_argument("--actor-key", default="actor_marl")
