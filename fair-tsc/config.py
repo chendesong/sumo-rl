@@ -37,10 +37,11 @@ ROUTE_FILE = os.path.join(BASE_DIR, f"nets/4x4grid/4x4_{DEMAND_LEVEL}.rou.xml")
 # Training mode
 _fairness_env = os.environ.get("FAIR_TSC_FAIRNESS_ENABLED", os.environ.get("FAIRNESS_ENABLED", "1"))
 FAIRNESS_ENABLED = _env_bool("FAIR_TSC_FAIRNESS_ENABLED", _fairness_env)
+SEED = int(os.environ.get("FAIR_TSC_SEED", "42"))
 
 _TS = time.strftime("%Y%m%d_%H%M")
 RUN_PREFIX = "fair_tsc" if FAIRNESS_ENABLED else "mappo_calib"
-RUN_NAME = f"{RUN_PREFIX}_4x4_{DEMAND_LEVEL}_{_TS}"
+RUN_NAME = f"{RUN_PREFIX}_4x4_{DEMAND_LEVEL}_s{SEED}_{_TS}"
 OUTPUT_DIR = os.path.join(BASE_DIR, "outputs", RUN_NAME)
 CKPT_DIR = os.path.join(BASE_DIR, "checkpoints", RUN_NAME)
 
@@ -124,4 +125,3 @@ THEIL_EMA_BETA = 0.9
 # Logging
 LOG_EVERY_N_EPISODES = 1
 SAVE_CKPT_EVERY_N = 50
-SEED = 42
