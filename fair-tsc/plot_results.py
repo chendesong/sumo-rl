@@ -25,6 +25,12 @@ def _plot_if_present(ax, df, x, columns):
             ax.plot(df[x], df[col], label=label)
 
 
+def _rolling_window(df, default=20):
+    if len(df) <= 1:
+        return 1
+    return max(1, min(default, len(df) // 5))
+
+
 def main():
     log_path = sys.argv[1] if len(sys.argv) > 1 else find_latest_log()
     print(f"Reading {log_path}")
@@ -35,7 +41,14 @@ def main():
     fig, axes = plt.subplots(3, 3, figsize=(18, 12))
 
     ax = axes[0, 0]
-    ax.plot(df.episode, df.reward_mean, label="mean", lw=1.2)
+    reward_win = _rolling_window(s2 if len(s2) else df, default=20)
+    ax.plot(df.episode, df.reward_mean, label="raw mean", lw=0.8, alpha=0.45)
+    ax.plot(
+        df.episode,
+        df.reward_mean.rolling(reward_win, min_periods=1).mean(),
+        label=f"rolling mean (w={reward_win})",
+        lw=2.0,
+    )
     ax.fill_between(df.episode, df.reward_min, df.reward_max, alpha=0.2, label="min-max")
     if len(s1):
         ax.axvspan(s1.episode.min() - 0.5, s1.episode.max() + 0.5, color="orange", alpha=0.15, label="Stage 1")
@@ -54,7 +67,16 @@ def main():
     ax.grid(alpha=0.3)
 
     ax = axes[0, 2]
-    _plot_if_present(ax, s2, "episode", [("theil_inter", "T_inter"), ("theil_intra", "T_intra")])
+    fair_win = _rolling_window(s2, default=20)
+    for col, label in [("theil_inter", "T_inter"), ("theil_intra", "T_intra")]:
+        if col in s2.columns:
+            ax.plot(s2.episode, s2[col], lw=0.7, alpha=0.35)
+            ax.plot(
+                s2.episode,
+                s2[col].rolling(fair_win, min_periods=1).mean(),
+                label=f"{label} rolling",
+                lw=1.8,
+            )
     ax.set_title("Dual-Level Fairness")
     ax.set_xlabel("episode")
     ax.legend()
@@ -75,7 +97,14 @@ def main():
     ax.grid(alpha=0.3)
 
     ax = axes[1, 2]
-    _plot_if_present(ax, s2, "episode", [("max_phase_interval", "max phase interval")])
+    if "max_phase_interval" in s2.columns:
+        ax.plot(s2.episode, s2.max_phase_interval, lw=0.7, alpha=0.35)
+        ax.plot(
+            s2.episode,
+            s2.max_phase_interval.rolling(fair_win, min_periods=1).mean(),
+            label=f"max phase interval rolling (w={fair_win})",
+            lw=1.8,
+        )
     ax.set_title("Phase Service Interval")
     ax.set_xlabel("episode")
     ax.legend()
@@ -116,7 +145,10 @@ def main():
     print(f"Wall time:      {df.wall_time_s.iloc[-1] / 60:.1f} min")
     if len(s2):
         tail = s2.tail(min(20, len(s2)))
+        head = s2.head(min(20, len(s2)))
         print(f"Reward last mean:       {tail.reward_mean.mean():+.2f}")
+        print(f"Reward first mean:      {head.reward_mean.mean():+.2f}")
+        print(f"Reward last-first:      {tail.reward_mean.mean() - head.reward_mean.mean():+.2f}")
         print(f"T_inter last mean:      {tail.theil_inter.mean():.6f}")
         print(f"T_intra last mean:      {tail.theil_intra.mean():.6f}")
         print(f"Max phase interval:     {tail.max_phase_interval.mean():.2f}")
