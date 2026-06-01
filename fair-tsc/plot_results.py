@@ -31,6 +31,31 @@ def _rolling_window(df, default=20):
     return max(1, min(default, len(df) // 5))
 
 
+REWARD_DIAGNOSTIC_COLS = {
+    "reward_vehicle_component",
+    "reward_ped_component",
+    "reward_env_component_sum",
+    "fair_penalty_mean",
+    "fair_penalty_max",
+    "reward_after_fair_proxy",
+    "reward_norm_enabled",
+    "reward_norm_mean",
+    "reward_norm_var",
+}
+
+
+def _print_window_stats(df, window, columns):
+    tail = df.tail(min(window, len(df)))
+    print(f"\nLast{len(tail)} mean +/- std:")
+    for col, label in columns:
+        if col not in tail.columns:
+            continue
+        values = pd.to_numeric(tail[col], errors="coerce").dropna()
+        if len(values) == 0:
+            continue
+        print(f"  {label:24s} {values.mean():+10.4f} +/- {values.std(ddof=0):.4f}")
+
+
 def main():
     log_path = sys.argv[1] if len(sys.argv) > 1 else find_latest_log()
     print(f"Reading {log_path}")
@@ -49,6 +74,19 @@ def main():
         label=f"rolling mean (w={reward_win})",
         lw=2.0,
     )
+    for col, label in [
+        ("reward_vehicle_component", "vehicle queue term"),
+        ("reward_ped_component", "ped queue term"),
+        ("reward_after_fair_proxy", "after fairness proxy"),
+    ]:
+        if col in df.columns:
+            ax.plot(
+                df.episode,
+                df[col].rolling(reward_win, min_periods=1).mean(),
+                label=label,
+                lw=1.2,
+                ls="--",
+            )
     ax.fill_between(df.episode, df.reward_min, df.reward_max, alpha=0.2, label="min-max")
     if len(s1):
         ax.axvspan(s1.episode.min() - 0.5, s1.episode.max() + 0.5, color="orange", alpha=0.15, label="Stage 1")
@@ -58,7 +96,13 @@ def main():
     ax.grid(alpha=0.3)
 
     ax = axes[0, 1]
-    agent_cols = [c for c in df.columns if c.startswith("reward_") and c not in ("reward_mean", "reward_min", "reward_max")]
+    agent_cols = [
+        c
+        for c in df.columns
+        if c.startswith("reward_J")
+        and c not in ("reward_mean", "reward_min", "reward_max")
+        and c not in REWARD_DIAGNOSTIC_COLS
+    ]
     win = max(1, len(s2) // 30) if len(s2) else 1
     for col in agent_cols:
         ax.plot(s2.episode, s2[col].rolling(win, min_periods=1).mean(), lw=0.8)
@@ -154,6 +198,21 @@ def main():
         print(f"Max phase interval:     {tail.max_phase_interval.mean():.2f}")
         if "lambda_fair" in tail.columns:
             print(f"lambda_fair end:        {tail.lambda_fair.iloc[-1]:.6f}")
+        diagnostic_cols = [
+            ("reward_mean", "reward mean"),
+            ("theil_inter", "T_inter"),
+            ("theil_intra", "T_intra"),
+            ("max_phase_interval", "max phase interval"),
+            ("reward_vehicle_component", "vehicle queue term"),
+            ("reward_ped_component", "ped queue term"),
+            ("reward_after_fair_proxy", "after fairness proxy"),
+            ("vehicle_queue_mean", "vehicle queue mean"),
+            ("ped_queue_mean", "ped queue mean"),
+            ("fair_penalty_mean", "fair penalty mean"),
+            ("fair_penalty_max", "fair penalty max"),
+        ]
+        _print_window_stats(s2, 20, diagnostic_cols)
+        _print_window_stats(s2, 50, diagnostic_cols)
 
 
 if __name__ == "__main__":

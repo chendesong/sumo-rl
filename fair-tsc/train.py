@@ -54,6 +54,8 @@ def collect_one_episode(env, actor, critic, buffer, device, seed=None):
     n_steps = 0
     ped_wait_series = []
     ped_expected_series = []
+    vehicle_queue_series = []
+    ped_queue_series = []
 
     while not done:
         global_obs = env.get_global_obs(obs)
@@ -71,6 +73,8 @@ def collect_one_episode(env, actor, critic, buffer, device, seed=None):
         if probe:
             ped_wait_series.append(float(probe.get("agents_total_ped_waiting_time", 0.0)))
             ped_expected_series.append(float(probe.get("agents_total_expected_violations", 0.0)))
+            vehicle_queue_series.append(float(probe.get("agents_total_stopped", 0.0)))
+            ped_queue_series.append(float(probe.get("agents_total_ped_queued", 0.0)))
 
         for i, agent in enumerate(env.agent_ids):
             buffer.add(
@@ -110,7 +114,17 @@ def collect_one_episode(env, actor, critic, buffer, device, seed=None):
         "ped_expected_violations": ped_expected,
         "ped_risk": normalize_pedestrian_risk(ped_expected, num_agents=env.num_agents),
     }
-    return ep_reward, n_steps, safety, reward_norm
+    denom = max(float(env.num_agents) * float(C.REWARD_SCALE), 1e-9)
+    reward_components = {
+        "reward_vehicle_component": -float(np.sum(vehicle_queue_series)) / denom,
+        "reward_ped_component": -float(C.OMEGA_P) * float(np.sum(ped_queue_series)) / denom,
+        "vehicle_queue_mean": _mean_or_zero(vehicle_queue_series),
+        "ped_queue_mean": _mean_or_zero(ped_queue_series),
+    }
+    reward_components["reward_env_component_sum"] = (
+        reward_components["reward_vehicle_component"] + reward_components["reward_ped_component"]
+    )
+    return ep_reward, n_steps, safety, reward_norm, reward_components
 
 
 def compute_dual_level_fairness(env, buffer, deltas):
@@ -169,6 +183,19 @@ def select_fair_credit(fair: Dict, agent_ids) -> Dict[str, float]:
     if C.FAIR_CREDIT_MODE == "none":
         return {agent: 0.0 for agent in agent_ids}
     raise ValueError(f"Unknown FAIR_TSC_CREDIT_MODE={C.FAIR_CREDIT_MODE}")
+
+
+def fair_penalty_summary(fair_credit: Dict[str, float], lambda_fair: float) -> Dict[str, float]:
+    vals = np.asarray(
+        [float(lambda_fair) * float(v) for v in fair_credit.values()],
+        dtype=np.float64,
+    )
+    if vals.size == 0:
+        return {"fair_penalty_mean": 0.0, "fair_penalty_max": 0.0}
+    return {
+        "fair_penalty_mean": float(vals.mean()),
+        "fair_penalty_max": float(vals.max()),
+    }
 
 
 def write_row(writer, base, stats):
@@ -242,6 +269,14 @@ def main():
         "reward_mean",
         "reward_min",
         "reward_max",
+        "reward_vehicle_component",
+        "reward_ped_component",
+        "reward_env_component_sum",
+        "vehicle_queue_mean",
+        "ped_queue_mean",
+        "fair_penalty_mean",
+        "fair_penalty_max",
+        "reward_after_fair_proxy",
         *[f"reward_{a}" for a in env.agent_ids],
         "reward_norm_enabled",
         "reward_norm_mean",
@@ -293,7 +328,7 @@ def main():
     print(f"\n{'=' * 70}\nSTAGE 1: UE warm-up   target={C.T_WARM} steps\n{'=' * 70}")
     while global_step < C.T_WARM:
         buffer = RolloutBuffer(env.agent_ids, env.num_agents)
-        ep_reward, n, safety, reward_norm = collect_one_episode(
+        ep_reward, n, safety, reward_norm, reward_components = collect_one_episode(
             env, actor_ue, critic_ue, buffer, device, seed=C.SEED + episode
         )
         global_step += n
@@ -314,6 +349,7 @@ def main():
         )
 
         rewards = np.asarray(list(ep_reward.values()), dtype=np.float32)
+        penalty_stats = fair_penalty_summary({}, 0.0)
         elapsed = time.time() - t0
         print(
             f"[STAGE1] ep={episode:3d} step={global_step:6d}/{C.T_WARM} "
@@ -332,6 +368,9 @@ def main():
                 "reward_mean": float(rewards.mean()),
                 "reward_min": float(rewards.min()),
                 "reward_max": float(rewards.max()),
+                **reward_components,
+                **penalty_stats,
+                "reward_after_fair_proxy": float(rewards.mean()) - penalty_stats["fair_penalty_mean"],
                 **{f"reward_{a}": float(ep_reward[a]) for a in env.agent_ids},
                 **reward_norm,
                 "delta_mean": 0.0,
@@ -358,7 +397,7 @@ def main():
     print(f"{'=' * 70}\nSTAGE 2: MARL training   target={C.TOTAL_STEPS} total steps\n{'=' * 70}")
     while global_step < C.TOTAL_STEPS:
         buffer = RolloutBuffer(env.agent_ids, env.num_agents)
-        ep_reward, n, safety, reward_norm = collect_one_episode(
+        ep_reward, n, safety, reward_norm, reward_components = collect_one_episode(
             env, actor_marl, critic_marl, buffer, device, seed=C.SEED + episode
         )
         global_step += n
@@ -374,6 +413,7 @@ def main():
         else:
             pid_stats = disabled_pid_stats(fair["C_fair"])
             fair_credit = select_fair_credit(fair, env.agent_ids)
+        penalty_stats = fair_penalty_summary(fair_credit, pid_stats["lambda_fair"])
 
         ppo_stats = ppo_update(
             actor=actor_marl,
@@ -432,6 +472,9 @@ def main():
                 "reward_mean": float(rewards.mean()),
                 "reward_min": float(rewards.min()),
                 "reward_max": float(rewards.max()),
+                **reward_components,
+                **penalty_stats,
+                "reward_after_fair_proxy": float(rewards.mean()) - penalty_stats["fair_penalty_mean"],
                 **{f"reward_{a}": float(ep_reward[a]) for a in env.agent_ids},
                 **reward_norm,
                 "delta_mean": float(deltas.mean().item()),

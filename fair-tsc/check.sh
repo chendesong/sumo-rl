@@ -77,6 +77,8 @@ if len(s2):
     cols = [
         "episode", "global_step", "reward_mean", "theil_inter", "theil_intra",
         "max_phase_interval", "C_fair_raw", "lambda_fair",
+        "reward_vehicle_component", "reward_ped_component", "fair_penalty_mean",
+        "vehicle_queue_mean", "ped_queue_mean",
         "explained_var", "approx_kl",
     ]
     cols = [c for c in cols if c in s2.columns]
