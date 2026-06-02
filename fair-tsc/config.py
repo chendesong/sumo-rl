@@ -26,14 +26,22 @@ else:
 
 
 # Network and demand
-DEMAND_LEVELS = {"low", "medium", "high", "ultra_stress", "curriculum_lmh", "curriculum_mhu"}
+DEMAND_LEVELS = {
+    "low",
+    "medium",
+    "high",
+    "ultra_stress",
+    "curriculum_lmh",
+    "curriculum_lmhu",
+    "curriculum_mhu",
+}
 DEMAND_LEVEL = os.environ.get("FAIR_TSC_DEMAND", "curriculum_mhu").lower()
 if DEMAND_LEVEL not in DEMAND_LEVELS:
     raise ValueError(f"FAIR_TSC_DEMAND must be one of: {', '.join(sorted(DEMAND_LEVELS))}")
 
 _NET_NAME = (
     "4x4_ped_yellow.net.xml"
-    if DEMAND_LEVEL in {"ultra_stress", "curriculum_lmh", "curriculum_mhu"}
+    if DEMAND_LEVEL in {"ultra_stress", "curriculum_lmh", "curriculum_lmhu", "curriculum_mhu"}
     else "4x4.net.xml"
 )
 NET_FILE = os.environ.get(

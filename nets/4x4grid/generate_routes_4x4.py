@@ -49,6 +49,8 @@ Curriculum demand:
     increasing load:
 
       curriculum_lmh: low-like -> medium-like -> high-like
+      curriculum_lmhu: low-like -> medium-like -> high-like -> ultra-like,
+                       with a stronger pedestrian stream
       curriculum_mhu: medium-like -> high-like -> ultra-stress
 """
 
@@ -73,6 +75,12 @@ CURRICULUMS = {
         ("low", 0.0, 1200.0, 250.0, 25.0),
         ("medium", 1200.0, 2400.0, 350.0, 35.0),
         ("high", 2400.0, 3600.0, 450.0, 45.0),
+    ],
+    "curriculum_lmhu": [
+        ("low", 0.0, 900.0, 250.0, 40.0),
+        ("medium", 900.0, 1800.0, 350.0, 55.0),
+        ("high", 1800.0, 2700.0, 450.0, 70.0),
+        ("ultra_stress", 2700.0, 3600.0, 550.0, 85.0),
     ],
     "curriculum_mhu": [
         ("medium", 0.0, 1200.0, 450.0, 45.0),
@@ -340,7 +348,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "--levels",
         nargs="+",
-        default=["low", "medium", "high", "ultra_stress", "curriculum_lmh", "curriculum_mhu"],
+        default=[
+            "low",
+            "medium",
+            "high",
+            "ultra_stress",
+            "curriculum_lmh",
+            "curriculum_lmhu",
+            "curriculum_mhu",
+        ],
         help=f"Demand levels to generate. Choices: {', '.join([*DEMAND.keys(), *CURRICULUMS.keys()])}",
     )
     args = parser.parse_args()

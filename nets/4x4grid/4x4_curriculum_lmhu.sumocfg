@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<configuration>
+    <input>
+        <net-file value="4x4_ped_yellow.net.xml"/>
+        <route-files value="4x4_curriculum_lmhu.rou.xml"/>
+    </input>
+    <time>
+        <begin value="0"/>
+        <end value="3600"/>
+        <step-length value="1"/>
+    </time>
+    <processing>
+        <time-to-teleport value="600"/>
+    </processing>
+</configuration>
