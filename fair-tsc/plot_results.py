@@ -268,26 +268,32 @@ def main_one(log_path):
 
     ax = axes[0, 2]
     fair_win = _rolling_window(s2, default=20)
-    for col, label in [("theil_inter", "T_inter"), ("theil_intra", "T_intra")]:
-        if col in s2.columns:
-            ax.plot(s2.episode, s2[col], lw=0.7, alpha=0.35)
-            ax.plot(
-                s2.episode,
-                s2[col].rolling(fair_win, min_periods=1).mean(),
-                label=f"{label} rolling",
-                lw=1.8,
-            )
-    ax.set_title("Dual-Level Fairness")
-    ax.set_xlabel("episode")
-    ax.legend()
-    ax.grid(alpha=0.3)
+    if is_fair_run:
+        for col, label in [("theil_inter", "T_inter"), ("theil_intra", "T_intra")]:
+            if col in s2.columns:
+                ax.plot(s2.episode, s2[col], lw=0.7, alpha=0.35)
+                ax.plot(
+                    s2.episode,
+                    s2[col].rolling(fair_win, min_periods=1).mean(),
+                    label=f"{label} rolling",
+                    lw=1.8,
+                )
+        ax.set_title("Dual-Level Fairness")
+        ax.set_xlabel("episode")
+        ax.legend()
+        ax.grid(alpha=0.3)
+    else:
+        ax.set_axis_off()
 
     ax = axes[1, 0]
-    _plot_if_present(ax, s2, "episode", [("delta_mean", "delta mean"), ("delta_max", "delta max")])
-    ax.set_title("Sacrifice Gap")
-    ax.set_xlabel("episode")
-    ax.legend()
-    ax.grid(alpha=0.3)
+    if is_fair_run:
+        _plot_if_present(ax, s2, "episode", [("delta_mean", "delta mean"), ("delta_max", "delta max")])
+        ax.set_title("Sacrifice Gap")
+        ax.set_xlabel("episode")
+        ax.legend()
+        ax.grid(alpha=0.3)
+    else:
+        ax.set_axis_off()
 
     ax = axes[1, 1]
     if is_fair_run:
