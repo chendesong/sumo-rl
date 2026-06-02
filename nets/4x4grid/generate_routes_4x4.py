@@ -43,9 +43,13 @@ Ultra-stress demand:
     intersections can become bottlenecks instead of only one or two extremes.
 
 Curriculum demand:
-    The "curriculum_mhu" file keeps the ultra-stress OD pairs fixed but ramps
-    load inside one episode: medium-like load for 0-1200s, high-like load for
-    1200-2400s, and ultra-stress load for 2400-3600s.
+    The curriculum files keep the ultra-stress OD pairs fixed and only ramp
+    demand intensity inside one episode. This keeps the bottleneck locations
+    consistent across stages, so the policy learns the same corridors under
+    increasing load:
+
+      curriculum_lmh: low-like -> medium-like -> high-like
+      curriculum_mhu: medium-like -> high-like -> ultra-stress
 """
 
 import argparse
@@ -64,11 +68,18 @@ DEMAND = {
     "ultra_stress": {"veh": 650, "ped": 65},
 }
 
-CURRICULUM_SEGMENTS = [
-    ("medium", 0.0, 1200.0, 450.0, 45.0),
-    ("high", 1200.0, 2400.0, 550.0, 55.0),
-    ("ultra_stress", 2400.0, 3600.0, 650.0, 65.0),
-]
+CURRICULUMS = {
+    "curriculum_lmh": [
+        ("low", 0.0, 1200.0, 250.0, 25.0),
+        ("medium", 1200.0, 2400.0, 350.0, 35.0),
+        ("high", 2400.0, 3600.0, 450.0, 45.0),
+    ],
+    "curriculum_mhu": [
+        ("medium", 0.0, 1200.0, 450.0, 45.0),
+        ("high", 1200.0, 2400.0, 550.0, 55.0),
+        ("ultra_stress", 2400.0, 3600.0, 650.0, 65.0),
+    ],
+}
 
 # ---------------------------------------------------------------------------
 # Per-entry tier weights
@@ -228,9 +239,9 @@ def write_rou(out_dir: str, level: str, veh_od, ped_od) -> str:
     return path
 
 
-def write_curriculum_rou(out_dir: str, veh_od, ped_od) -> str:
+def write_curriculum_rou(out_dir: str, level: str, veh_od, ped_od) -> str:
     """Write one route file with fixed OD pairs and staged demand intensity."""
-    level = "curriculum_mhu"
+    segments = CURRICULUMS[level]
     path = os.path.join(out_dir, f"4x4_{level}.rou.xml")
     total_v = 0.0
     total_p = 0.0
@@ -241,11 +252,12 @@ def write_curriculum_rou(out_dir: str, veh_od, ped_od) -> str:
         '<routes>',
         f'    <vType id="{PED_TYPE_ID}" vClass="pedestrian" '
         'impatience="0.0" jmIgnoreFoeProb="0.0" jmDriveAfterRedTime="-1"/>',
-        '    <!-- demand=curriculum_mhu: same ultra-stress OD, staged 0-1200 medium, '
-        '1200-2400 high, 2400-3600 ultra_stress -->',
+        f'    <!-- demand={level}: same ultra-stress OD, staged '
+        + ', '.join(f'{int(begin)}-{int(end)} {label}' for label, begin, end, _base_v, _base_p in segments)
+        + ' -->',
     ]
 
-    for label, begin, end, base_v, base_p in CURRICULUM_SEGMENTS:
+    for label, begin, end, base_v, base_p in segments:
         duration_h = max(end - begin, 0.0) / 3600.0
         seg_v = sum(base_v * entry_weight(e_in, "ultra_stress") for e_in, _ in veh_od)
         seg_p = sum(base_p * entry_weight(e_in, "ultra_stress") for e_in, _ in ped_od)
@@ -306,15 +318,15 @@ def main(out_dir: str = ".", seed: int = 42, levels=None):
     print(f"Local    entries (weight {LOCAL_WEIGHT}): {sorted(local_entries)}")
     print()
 
-    allowed = sorted([*DEMAND.keys(), "curriculum_mhu"])
+    allowed = sorted([*DEMAND.keys(), *CURRICULUMS.keys()])
     for level in levels:
         if level not in allowed:
             raise ValueError(f"Unknown level {level!r}; choose from {allowed}")
         if level == "ultra_stress":
             level_veh_od, level_ped_od = ultra_stress_od()
-        elif level == "curriculum_mhu":
+        elif level in CURRICULUMS:
             level_veh_od, level_ped_od = ultra_stress_od()
-            write_curriculum_rou(out_dir, level_veh_od, level_ped_od)
+            write_curriculum_rou(out_dir, level, level_veh_od, level_ped_od)
             continue
         else:
             level_veh_od, level_ped_od = veh_od, ped_od
@@ -328,8 +340,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--levels",
         nargs="+",
-        default=["low", "medium", "high", "ultra_stress", "curriculum_mhu"],
-        help=f"Demand levels to generate. Choices: {', '.join([*DEMAND.keys(), 'curriculum_mhu'])}",
+        default=["low", "medium", "high", "ultra_stress", "curriculum_lmh", "curriculum_mhu"],
+        help=f"Demand levels to generate. Choices: {', '.join([*DEMAND.keys(), *CURRICULUMS.keys()])}",
     )
     args = parser.parse_args()
     main(args.out_dir, args.seed, args.levels)
