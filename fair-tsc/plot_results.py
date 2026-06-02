@@ -93,7 +93,8 @@ def _load_rule_based_baselines(log_path):
         )
     if demand:
         candidates.extend(glob.glob(os.path.join(base, f"rule_based_{demand}_*", "rule_based_baselines.csv")))
-    candidates.extend(glob.glob(os.path.join(base, "rule_based_*", "rule_based_baselines.csv")))
+    if os.environ.get("FAIR_TSC_ALLOW_ANY_BASELINE", "0").lower() in {"1", "true", "yes"}:
+        candidates.extend(glob.glob(os.path.join(base, "rule_based_*", "rule_based_baselines.csv")))
 
     existing = [path for path in candidates if os.path.exists(path)]
     if not existing:
