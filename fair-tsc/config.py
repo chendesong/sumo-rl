@@ -26,12 +26,15 @@ else:
 
 
 # Network and demand
-DEMAND_LEVELS = {"low", "medium", "high", "ultra_stress"}
+DEMAND_LEVELS = {"low", "medium", "high", "ultra_stress", "curriculum_mhu"}
 DEMAND_LEVEL = os.environ.get("FAIR_TSC_DEMAND", "ultra_stress").lower()
 if DEMAND_LEVEL not in DEMAND_LEVELS:
     raise ValueError(f"FAIR_TSC_DEMAND must be one of: {', '.join(sorted(DEMAND_LEVELS))}")
 NET_FILE = os.path.join(BASE_DIR, "nets/4x4grid/4x4.net.xml")
-ROUTE_FILE = os.path.join(BASE_DIR, f"nets/4x4grid/4x4_{DEMAND_LEVEL}.rou.xml")
+ROUTE_FILE = os.environ.get(
+    "FAIR_TSC_ROUTE_FILE",
+    os.path.join(BASE_DIR, f"nets/4x4grid/4x4_{DEMAND_LEVEL}.rou.xml"),
+)
 
 
 # Training mode
@@ -50,6 +53,7 @@ CKPT_DIR = os.path.join(BASE_DIR, "checkpoints", RUN_NAME)
 NUM_SECONDS = int(os.environ.get("FAIR_TSC_NUM_SECONDS", "3600"))
 DELTA_TIME = int(os.environ.get("FAIR_TSC_DELTA_TIME", "5"))
 MIN_GREEN = int(os.environ.get("FAIR_TSC_MIN_GREEN", "5"))
+TIME_TO_TELEPORT = int(os.environ.get("FAIR_TSC_TIME_TO_TELEPORT", "600"))
 USE_GUI = False
 LIBSUMO = True
 STEPS_PER_EPISODE = NUM_SECONDS // DELTA_TIME
@@ -95,13 +99,13 @@ T_WARM = int(os.environ.get("FAIR_TSC_T_WARM", "7200"))
 TOTAL_STEPS = int(os.environ.get("FAIR_TSC_TOTAL_STEPS", "300000"))
 ROLLOUT_LENGTH = int(os.environ.get("FAIR_TSC_ROLLOUT_LENGTH", "720"))
 PPO_EPOCHS = 10
-MINIBATCH_SIZE = 512
+MINIBATCH_SIZE = int(os.environ.get("FAIR_TSC_MINIBATCH_SIZE", "1024"))
 BATCH_SIZE = ROLLOUT_LENGTH * 16
 
 
 # Optimization
-ACTOR_LR = 3e-4
-CRITIC_LR = 1e-3
+ACTOR_LR = float(os.environ.get("FAIR_TSC_ACTOR_LR", "2e-4"))
+CRITIC_LR = float(os.environ.get("FAIR_TSC_CRITIC_LR", "5e-4"))
 GAMMA = 0.99
 GAE_LAMBDA = 0.95
 CLIP_EPS = 0.2

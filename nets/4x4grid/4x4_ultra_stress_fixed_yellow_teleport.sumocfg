@@ -2,7 +2,7 @@
 
 <configuration>
     <input>
-        <net-file value="4x4.net.xml"/>
+        <net-file value="4x4_fixed_yellow.net.xml"/>
         <route-files value="4x4_ultra_stress.rou.xml"/>
     </input>
     <time>
@@ -10,6 +10,6 @@
         <step-length value="1"/>
     </time>
     <processing>
-        <time-to-teleport value="-1"/>
+        <time-to-teleport value="600"/>
     </processing>
 </configuration>

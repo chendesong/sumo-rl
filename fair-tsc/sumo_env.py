@@ -54,6 +54,7 @@ class FairTSCEnv:
         min_green: int = 5,
         use_gui: bool = False,
         additional_sumo_cmd: Optional[str] = None,
+        time_to_teleport: Optional[int] = None,
     ):
         self.net_file = net_file
         self.route_file = route_file
@@ -63,6 +64,7 @@ class FairTSCEnv:
         self.min_green = min_green
         self.use_gui = use_gui
         self.additional_sumo_cmd = additional_sumo_cmd
+        self.time_to_teleport = C.TIME_TO_TELEPORT if time_to_teleport is None else int(time_to_teleport)
 
         self._par_env = None
         self.agent_ids: List[str] = []
@@ -98,6 +100,7 @@ class FairTSCEnv:
             reward_fn="queue-ped",
             observation_class=PedestrianObservationFunction,
             additional_sumo_cmd=self.additional_sumo_cmd,
+            time_to_teleport=self.time_to_teleport,
         )
 
     def _walk_to_sumo_env(self):
@@ -283,6 +286,7 @@ class FairTSCEnv:
                     "simulation_departed_total_env": float(getattr(sumo_env, "num_departed_vehicles", 0.0)),
                     "simulation_arrived_total_env": float(getattr(sumo_env, "num_arrived_vehicles", 0.0)),
                     "simulation_teleported_total_env": float(getattr(sumo_env, "num_teleported_vehicles", 0.0)),
+                    "simulation_time_to_teleport": float(self.time_to_teleport),
                 }
             )
         except Exception:

@@ -41,6 +41,11 @@ Ultra-stress demand:
     outer entries alive at a low rate.  The OD pairs are deterministic
     corridor/cross-corridor trips through the central 2x2 region, so multiple
     intersections can become bottlenecks instead of only one or two extremes.
+
+Curriculum demand:
+    The "curriculum_mhu" file keeps the ultra-stress OD pairs fixed but ramps
+    load inside one episode: medium-like load for 0-1200s, high-like load for
+    1200-2400s, and ultra-stress load for 2400-3600s.
 """
 
 import argparse
@@ -56,16 +61,22 @@ DEMAND = {
     "low":    {"veh": 250,  "ped": 60},
     "medium": {"veh": 500,  "ped": 120},
     "high":   {"veh": 750,  "ped": 180},
-    "ultra_stress": {"veh": 900, "ped": 240},
+    "ultra_stress": {"veh": 650, "ped": 65},
 }
+
+CURRICULUM_SEGMENTS = [
+    ("medium", 0.0, 1200.0, 450.0, 45.0),
+    ("high", 1200.0, 2400.0, 550.0, 55.0),
+    ("ultra_stress", 2400.0, 3600.0, 650.0, 65.0),
+]
 
 # ---------------------------------------------------------------------------
 # Per-entry tier weights
 # ---------------------------------------------------------------------------
 ARTERIAL_WEIGHT = 1.5
 LOCAL_WEIGHT    = 0.5
-ULTRA_ARTERIAL_WEIGHT = 2.0
-ULTRA_LOCAL_WEIGHT = 0.25
+ULTRA_ARTERIAL_WEIGHT = 1.46
+ULTRA_LOCAL_WEIGHT = 0.46
 
 # Arterial entries: middle 2 rows (r=2,3) for E-W flow + middle 2 cols (c=2,3) for N-S flow
 ARTERIAL_ENTRIES = set()
@@ -121,48 +132,48 @@ def sample_od(entries, exits, rng):
 
 
 def ultra_stress_od():
-    """Deterministic OD pairs that stress the central 2x2 intersections.
+    """Deterministic OD pairs that stress non-central corner-side bottlenecks.
 
-    The eight arterial entries cross the whole middle rows/columns.  The eight
-    local entries feed into those same corridors, which creates spillback and
-    phase competition around J22, J23, J32, and J33.
+    The heavy corridors are moved away from the central 2x2 to avoid whole-grid
+    lockup under fixed-time control.  The intended high-pressure intersections
+    are J44, J42, J11, and J13, with feeder flows still present elsewhere.
     """
     veh_od = [
-        ("-h11", "-h35"),  # west local -> east row 3
-        ("-h21", "-h25"),  # west row 2 -> east row 2
-        ("-h31", "-h35"),  # west row 3 -> east row 3
-        ("-h41", "-h25"),  # west local -> east row 2
-        ("h15", "h31"),    # east local -> west row 3
-        ("h25", "h21"),    # east row 2 -> west row 2
-        ("h35", "h31"),    # east row 3 -> west row 3
-        ("h45", "h21"),    # east local -> west row 2
-        ("-v11", "-v35"),  # north local -> south col 3
-        ("-v21", "-v25"),  # north col 2 -> south col 2
-        ("-v31", "-v35"),  # north col 3 -> south col 3
-        ("-v41", "-v25"),  # north local -> south col 2
-        ("v15", "v31"),    # south local -> north col 3
-        ("v25", "v21"),    # south col 2 -> north col 2
-        ("v35", "v31"),    # south col 3 -> north col 3
-        ("v45", "v21"),    # south local -> north col 2
+        ("-h11", "-h15"),  # west row 1 -> east row 1, stresses J11/J13
+        ("-h21", "-h15"),  # west feeder -> row 1 corridor
+        ("-h31", "-h45"),  # west feeder -> row 4 corridor
+        ("-h41", "-h45"),  # west row 4 -> east row 4, stresses J42/J44
+        ("h15", "h11"),    # east row 1 -> west row 1
+        ("h25", "h11"),    # east feeder -> row 1 corridor
+        ("h35", "h41"),    # east feeder -> row 4 corridor
+        ("h45", "h41"),    # east row 4 -> west row 4
+        ("-v11", "-v15"),  # north col 1 -> south col 1, stresses J11
+        ("-v21", "-v45"),  # north feeder -> col 4 corridor
+        ("-v31", "-v15"),  # north col 3 -> south col 1/3 side
+        ("-v41", "-v45"),  # north col 4 -> south col 4, stresses J44
+        ("v15", "v11"),    # south col 1 -> north col 1
+        ("v25", "v41"),    # south feeder -> col 4 corridor
+        ("v35", "v11"),    # south col 3 -> north col 1/3 side
+        ("v45", "v41"),    # south col 4 -> north col 4
     ]
 
     ped_od = [
-        ("-h11", "-v35"),
-        ("-h21", "v21"),
-        ("-h31", "v31"),
-        ("-h41", "-v25"),
-        ("h15", "v31"),
-        ("h25", "-v21"),
-        ("h35", "-v31"),
-        ("h45", "v21"),
-        ("-v11", "-h35"),
-        ("-v21", "h21"),
-        ("-v31", "h31"),
-        ("-v41", "-h25"),
-        ("v15", "h31"),
-        ("v25", "-h21"),
-        ("v35", "-h31"),
-        ("v45", "h21"),
+        ("-h11", "-v15"),
+        ("-h21", "-v15"),
+        ("-h31", "-v45"),
+        ("-h41", "-v45"),
+        ("h15", "v11"),
+        ("h25", "v11"),
+        ("h35", "v41"),
+        ("h45", "v41"),
+        ("-v11", "-h15"),
+        ("-v21", "-h45"),
+        ("-v31", "-h15"),
+        ("-v41", "-h45"),
+        ("v15", "h11"),
+        ("v25", "h41"),
+        ("v35", "h11"),
+        ("v45", "h41"),
     ]
     return veh_od, ped_od
 
@@ -217,6 +228,65 @@ def write_rou(out_dir: str, level: str, veh_od, ped_od) -> str:
     return path
 
 
+def write_curriculum_rou(out_dir: str, veh_od, ped_od) -> str:
+    """Write one route file with fixed OD pairs and staged demand intensity."""
+    level = "curriculum_mhu"
+    path = os.path.join(out_dir, f"4x4_{level}.rou.xml")
+    total_v = 0.0
+    total_p = 0.0
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '',
+        '<!-- generated by generate_routes_4x4.py -->',
+        '<routes>',
+        f'    <vType id="{PED_TYPE_ID}" vClass="pedestrian" '
+        'impatience="0.0" jmIgnoreFoeProb="0.0" jmDriveAfterRedTime="-1"/>',
+        '    <!-- demand=curriculum_mhu: same ultra-stress OD, staged 0-1200 medium, '
+        '1200-2400 high, 2400-3600 ultra_stress -->',
+    ]
+
+    for label, begin, end, base_v, base_p in CURRICULUM_SEGMENTS:
+        duration_h = max(end - begin, 0.0) / 3600.0
+        seg_v = sum(base_v * entry_weight(e_in, "ultra_stress") for e_in, _ in veh_od)
+        seg_p = sum(base_p * entry_weight(e_in, "ultra_stress") for e_in, _ in ped_od)
+        total_v += seg_v * duration_h
+        total_p += seg_p * duration_h
+        lines.append(
+            f'    <!-- segment={label}: begin={begin:.0f}, end={end:.0f}, '
+            f'{int(seg_v)} veh/h + {int(seg_p)} ped/h -->'
+        )
+
+        for e_in, e_out in veh_od:
+            per_v = base_v * entry_weight(e_in, "ultra_stress")
+            lines.append(
+                f'    <flow id="f_{label}_{e_in}_to_{e_out}" '
+                f'begin="{begin:.2f}" end="{end:.2f}" '
+                f'perHour="{per_v:.2f}" from="{e_in}" to="{e_out}" '
+                f'departLane="best" departSpeed="max"/>'
+            )
+
+        for e_in, e_out in ped_od:
+            per_p = base_p * entry_weight(e_in, "ultra_stress")
+            lines.append(
+                f'    <personFlow id="pf_{label}_{e_in}_to_{e_out}" '
+                f'type="{PED_TYPE_ID}" '
+                f'begin="{begin:.2f}" end="{end:.2f}" '
+                f'perHour="{per_p:.2f}">'
+            )
+            lines.append(f'        <personTrip from="{e_in}" to="{e_out}"/>')
+            lines.append('    </personFlow>')
+
+    lines.append(
+        f'    <!-- expected total over 3600s: {int(total_v)} vehicles + {int(total_p)} pedestrians -->'
+    )
+    lines.append('</routes>')
+
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write("\n".join(lines) + "\n")
+    print(f"Wrote {path}  ({int(total_v)} vehicles + {int(total_p)} pedestrians over 3600s)")
+    return path
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -236,11 +306,16 @@ def main(out_dir: str = ".", seed: int = 42, levels=None):
     print(f"Local    entries (weight {LOCAL_WEIGHT}): {sorted(local_entries)}")
     print()
 
+    allowed = sorted([*DEMAND.keys(), "curriculum_mhu"])
     for level in levels:
-        if level not in DEMAND:
-            raise ValueError(f"Unknown level {level!r}; choose from {sorted(DEMAND)}")
+        if level not in allowed:
+            raise ValueError(f"Unknown level {level!r}; choose from {allowed}")
         if level == "ultra_stress":
             level_veh_od, level_ped_od = ultra_stress_od()
+        elif level == "curriculum_mhu":
+            level_veh_od, level_ped_od = ultra_stress_od()
+            write_curriculum_rou(out_dir, level_veh_od, level_ped_od)
+            continue
         else:
             level_veh_od, level_ped_od = veh_od, ped_od
         write_rou(out_dir, level, level_veh_od, level_ped_od)
@@ -253,8 +328,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--levels",
         nargs="+",
-        default=["low", "medium", "high", "ultra_stress"],
-        help=f"Demand levels to generate. Choices: {', '.join(DEMAND)}",
+        default=["low", "medium", "high", "ultra_stress", "curriculum_mhu"],
+        help=f"Demand levels to generate. Choices: {', '.join([*DEMAND.keys(), 'curriculum_mhu'])}",
     )
     args = parser.parse_args()
     main(args.out_dir, args.seed, args.levels)

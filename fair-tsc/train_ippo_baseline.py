@@ -104,9 +104,13 @@ def main():
             "system_wait_mean",
             "ped_wait",
             "ped_risk",
+            "time_to_teleport",
+            "teleported_total",
             "departed_total",
             "arrived_total",
+            "completion_rate_departed",
             "completion_rate_demand",
+            "unfinished_vehicle_demand",
             "policy_loss",
             "value_loss",
             "entropy",
@@ -157,6 +161,10 @@ def main():
 
             rewards = np.asarray(list(ep_reward.values()), dtype=np.float64)
             env_metrics = coll.finalize(env)
+            completion_rate_departed = (
+                float(env_metrics.get("arrived_total", 0.0) or 0.0)
+                / max(float(env_metrics.get("departed_total", 0.0) or 0.0), 1.0)
+            )
             elapsed = time.time() - t0
             row = {
                 "stage": 2,
@@ -175,9 +183,13 @@ def main():
                 "system_wait_mean": _mean(env_metrics.get("system_total_waiting_time_series", [])),
                 "ped_wait": _mean(env_metrics.get("agents_total_ped_waiting_time_series", [])),
                 "ped_risk": float(env_metrics.get("ped_risk", 0.0) or 0.0),
+                "time_to_teleport": float(C.TIME_TO_TELEPORT),
+                "teleported_total": float(env_metrics.get("teleported_total", 0.0) or 0.0),
                 "departed_total": float(env_metrics.get("departed_total", 0.0) or 0.0),
                 "arrived_total": float(env_metrics.get("arrived_total", 0.0) or 0.0),
+                "completion_rate_departed": completion_rate_departed,
                 "completion_rate_demand": float(env_metrics.get("completion_rate_demand", 0.0) or 0.0),
+                "unfinished_vehicle_demand": float(env_metrics.get("unfinished_vehicle_demand", 0.0) or 0.0),
                 **stats,
             }
             writer.writerow(row)
@@ -187,7 +199,7 @@ def main():
                 f"[IPPO] ep={episode:4d} step={global_step:6d}/{C.TOTAL_STEPS} "
                 f"R={rewards.mean():+.1f} Tintra={row['theil_intra']:.4f} "
                 f"maxPhase={row['max_phase_interval']:.1f} "
-                f"H={stats.get('entropy', 0.0):.3f} t={elapsed:.0f}s"
+                f"H={stats.get('entropy', 0.0):.3f} tel={row['teleported_total']:.0f} t={elapsed:.0f}s"
             )
 
             if episode % C.SAVE_CKPT_EVERY_N == 0:

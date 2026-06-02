@@ -56,6 +56,7 @@ def collect_one_episode(env, actor, critic, buffer, device, seed=None):
     ped_expected_series = []
     vehicle_queue_series = []
     ped_queue_series = []
+    last_probe = {}
 
     while not done:
         global_obs = env.get_global_obs(obs)
@@ -71,6 +72,7 @@ def collect_one_episode(env, actor, critic, buffer, device, seed=None):
         next_obs, reward, _cp, _cs, done, info = env.step(action_dict)
         probe = _info_probe(info)
         if probe:
+            last_probe = probe
             ped_wait_series.append(float(probe.get("agents_total_ped_waiting_time", 0.0)))
             ped_expected_series.append(float(probe.get("agents_total_expected_violations", 0.0)))
             vehicle_queue_series.append(float(probe.get("agents_total_stopped", 0.0)))
@@ -124,7 +126,14 @@ def collect_one_episode(env, actor, critic, buffer, device, seed=None):
     reward_components["reward_env_component_sum"] = (
         reward_components["reward_vehicle_component"] + reward_components["reward_ped_component"]
     )
-    return ep_reward, n_steps, safety, reward_norm, reward_components
+    sim_metrics = dict(last_probe)
+    sim_metrics.update(env.get_simulation_progress_metrics())
+    departed_total = float(sim_metrics.get("simulation_departed_total_env", 0.0) or 0.0)
+    arrived_total = float(sim_metrics.get("simulation_arrived_total_env", 0.0) or 0.0)
+    sim_metrics["completion_rate_departed"] = (
+        float(arrived_total / departed_total) if departed_total > 0.0 else 0.0
+    )
+    return ep_reward, n_steps, safety, reward_norm, reward_components, sim_metrics
 
 
 def compute_dual_level_fairness(env, buffer, deltas):
@@ -216,6 +225,11 @@ def main():
         f"reward_norm={int(C.REWARD_NORMALIZE)} center={int(C.REWARD_NORM_CENTER)} "
         f"clip={C.REWARD_NORM_CLIP:g}"
     )
+    print(
+        f"sumo teleport={C.TIME_TO_TELEPORT}s  actor_lr={C.ACTOR_LR:g} "
+        f"critic_lr={C.CRITIC_LR:g} minibatch={C.MINIBATCH_SIZE}"
+    )
+    print(f"route file = {C.ROUTE_FILE}")
 
     os.makedirs(C.OUTPUT_DIR, exist_ok=True)
     os.makedirs(C.CKPT_DIR, exist_ok=True)
@@ -269,6 +283,7 @@ def main():
         "reward_mean",
         "reward_min",
         "reward_max",
+        "reward_std",
         "reward_vehicle_component",
         "reward_ped_component",
         "reward_env_component_sum",
@@ -289,6 +304,14 @@ def main():
         "ped_wait",
         "ped_risk",
         "ped_expected_violations",
+        "time_to_teleport",
+        "teleported_total",
+        "departed_total",
+        "arrived_total",
+        "completion_rate_departed",
+        "pending_vehicle_count",
+        "active_vehicle_count",
+        "min_expected_number",
         "C_fair_raw",
         "C_fair_ema",
         "fair_target",
@@ -328,7 +351,7 @@ def main():
     print(f"\n{'=' * 70}\nSTAGE 1: UE warm-up   target={C.T_WARM} steps\n{'=' * 70}")
     while global_step < C.T_WARM:
         buffer = RolloutBuffer(env.agent_ids, env.num_agents)
-        ep_reward, n, safety, reward_norm, reward_components = collect_one_episode(
+        ep_reward, n, safety, reward_norm, reward_components, sim_metrics = collect_one_episode(
             env, actor_ue, critic_ue, buffer, device, seed=C.SEED + episode
         )
         global_step += n
@@ -368,6 +391,7 @@ def main():
                 "reward_mean": float(rewards.mean()),
                 "reward_min": float(rewards.min()),
                 "reward_max": float(rewards.max()),
+                "reward_std": float(rewards.std()),
                 **reward_components,
                 **penalty_stats,
                 "reward_after_fair_proxy": float(rewards.mean()) - penalty_stats["fair_penalty_mean"],
@@ -381,6 +405,14 @@ def main():
                 "ped_wait": safety["ped_wait"],
                 "ped_risk": safety["ped_risk"],
                 "ped_expected_violations": safety["ped_expected_violations"],
+                "time_to_teleport": float(C.TIME_TO_TELEPORT),
+                "teleported_total": float(sim_metrics.get("simulation_teleported_total_env", 0.0) or 0.0),
+                "departed_total": float(sim_metrics.get("simulation_departed_total_env", 0.0) or 0.0),
+                "arrived_total": float(sim_metrics.get("simulation_arrived_total_env", 0.0) or 0.0),
+                "completion_rate_departed": float(sim_metrics.get("completion_rate_departed", 0.0) or 0.0),
+                "pending_vehicle_count": float(sim_metrics.get("simulation_pending_vehicle_count", 0.0) or 0.0),
+                "active_vehicle_count": float(sim_metrics.get("simulation_active_vehicle_count", 0.0) or 0.0),
+                "min_expected_number": float(sim_metrics.get("simulation_min_expected_number", 0.0) or 0.0),
             },
             {**disabled_pid_stats(0.0), **ppo_stats},
         )
@@ -397,7 +429,7 @@ def main():
     print(f"{'=' * 70}\nSTAGE 2: MARL training   target={C.TOTAL_STEPS} total steps\n{'=' * 70}")
     while global_step < C.TOTAL_STEPS:
         buffer = RolloutBuffer(env.agent_ids, env.num_agents)
-        ep_reward, n, safety, reward_norm, reward_components = collect_one_episode(
+        ep_reward, n, safety, reward_norm, reward_components, sim_metrics = collect_one_episode(
             env, actor_marl, critic_marl, buffer, device, seed=C.SEED + episode
         )
         global_step += n
@@ -439,7 +471,8 @@ def main():
             f"[STAGE2] ep={episode:3d} step={global_step:6d}/{C.TOTAL_STEPS} "
             f"R={rewards.mean():+.1f} Tinter={fair['theil_inter']:.4f} "
             f"Tintra={fair['theil_intra']:.4f} Cfair={fair['C_fair']:.4f} "
-            f"lambda={pid_stats['lambda_fair']:.4f} H={ppo_stats['entropy']:.3f} t={elapsed:.0f}s"
+            f"lambda={pid_stats['lambda_fair']:.4f} H={ppo_stats['entropy']:.3f} "
+            f"tel={sim_metrics.get('simulation_teleported_total_env', 0.0):.0f} t={elapsed:.0f}s"
         )
         print(
             f"   worst-delta: {env.agent_ids[worst_idx]}={delta_agent_mean[worst_idx]:.3f}  "
@@ -472,6 +505,7 @@ def main():
                 "reward_mean": float(rewards.mean()),
                 "reward_min": float(rewards.min()),
                 "reward_max": float(rewards.max()),
+                "reward_std": float(rewards.std()),
                 **reward_components,
                 **penalty_stats,
                 "reward_after_fair_proxy": float(rewards.mean()) - penalty_stats["fair_penalty_mean"],
@@ -485,6 +519,14 @@ def main():
                 "ped_wait": safety["ped_wait"],
                 "ped_risk": safety["ped_risk"],
                 "ped_expected_violations": safety["ped_expected_violations"],
+                "time_to_teleport": float(C.TIME_TO_TELEPORT),
+                "teleported_total": float(sim_metrics.get("simulation_teleported_total_env", 0.0) or 0.0),
+                "departed_total": float(sim_metrics.get("simulation_departed_total_env", 0.0) or 0.0),
+                "arrived_total": float(sim_metrics.get("simulation_arrived_total_env", 0.0) or 0.0),
+                "completion_rate_departed": float(sim_metrics.get("completion_rate_departed", 0.0) or 0.0),
+                "pending_vehicle_count": float(sim_metrics.get("simulation_pending_vehicle_count", 0.0) or 0.0),
+                "active_vehicle_count": float(sim_metrics.get("simulation_active_vehicle_count", 0.0) or 0.0),
+                "min_expected_number": float(sim_metrics.get("simulation_min_expected_number", 0.0) or 0.0),
             },
             {**pid_stats, **ppo_stats},
         )

@@ -5,6 +5,7 @@ import os
 import sys
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 
@@ -56,8 +57,7 @@ def _print_window_stats(df, window, columns):
         print(f"  {label:24s} {values.mean():+10.4f} +/- {values.std(ddof=0):.4f}")
 
 
-def main():
-    log_path = sys.argv[1] if len(sys.argv) > 1 else find_latest_log()
+def main_one(log_path):
     print(f"Reading {log_path}")
     df = pd.read_csv(log_path)
     s1 = df[df.stage == 1]
@@ -210,9 +210,75 @@ def main():
             ("ped_queue_mean", "ped queue mean"),
             ("fair_penalty_mean", "fair penalty mean"),
             ("fair_penalty_max", "fair penalty max"),
+            ("teleported_total", "teleported total"),
+            ("completion_rate_departed", "completion departed"),
         ]
         _print_window_stats(s2, 20, diagnostic_cols)
         _print_window_stats(s2, 50, diagnostic_cols)
+
+
+def main_multi(log_paths):
+    dfs = []
+    labels = []
+    for path in log_paths:
+        df = pd.read_csv(path)
+        s2 = df[df.stage == 2].copy()
+        if len(s2) == 0:
+            continue
+        s2 = s2.reset_index(drop=True)
+        dfs.append(s2)
+        labels.append(os.path.basename(os.path.dirname(path)))
+
+    if not dfs:
+        raise ValueError("No Stage-2 rows found in the supplied logs.")
+
+    n = min(len(df) for df in dfs)
+    xs = np.arange(1, n + 1)
+    fig, axes = plt.subplots(2, 2, figsize=(14, 9))
+    cols = [
+        ("reward_mean", "Reward Mean"),
+        ("theil_inter", "T_inter"),
+        ("theil_intra", "T_intra"),
+        ("teleported_total", "Teleported Vehicles"),
+    ]
+    for ax, (col, title) in zip(axes.ravel(), cols):
+        present = [pd.to_numeric(df[col].iloc[:n], errors="coerce").to_numpy(dtype=float)
+                   for df in dfs if col in df.columns]
+        if not present:
+            ax.set_title(f"{title} (missing)")
+            continue
+        mat = np.vstack(present)
+        mean = np.nanmean(mat, axis=0)
+        std = np.nanstd(mat, axis=0)
+        win = max(1, min(20, n // 5))
+        mean_s = pd.Series(mean).rolling(win, min_periods=1).mean().to_numpy()
+        std_s = pd.Series(std).rolling(win, min_periods=1).mean().to_numpy()
+        ax.plot(xs, mean_s, lw=2.0, label=f"mean rolling (w={win})")
+        ax.fill_between(xs, mean_s - std_s, mean_s + std_s, alpha=0.2, label="+/- std")
+        ax.set_title(title)
+        ax.set_xlabel("Stage-2 episode")
+        ax.grid(alpha=0.3)
+        ax.legend()
+
+    fig.suptitle("Multi-Seed Training Curves", fontsize=14)
+    fig.tight_layout()
+    out_dir = os.path.commonpath([os.path.dirname(p) for p in log_paths])
+    if not os.path.isdir(out_dir):
+        out_dir = os.path.dirname(log_paths[0])
+    out_path = os.path.join(out_dir, "multi_seed_training_curves.png")
+    fig.savefig(out_path, dpi=120, bbox_inches="tight")
+    print(f"Saved {out_path}")
+    print("Logs:")
+    for label, path in zip(labels, log_paths):
+        print(f"  {label}: {path}")
+
+
+def main():
+    if len(sys.argv) > 2:
+        main_multi(sys.argv[1:])
+        return
+    log_path = sys.argv[1] if len(sys.argv) > 1 else find_latest_log()
+    main_one(log_path)
 
 
 if __name__ == "__main__":
