@@ -64,7 +64,68 @@ def _print_window_stats(df, window, columns):
         print(f"  {label:24s} {values.mean():+10.4f} +/- {values.std(ddof=0):.4f}")
 
 
+def _run_context_from_log(log_path):
+    run_name = os.path.basename(os.path.dirname(log_path))
+    demand = None
+    seed = None
+    marker = "_4x4_"
+    if marker in run_name:
+        suffix = run_name.split(marker, 1)[1]
+        if "_s" in suffix:
+            demand = suffix.rsplit("_s", 1)[0]
+            seed_part = suffix.rsplit("_s", 1)[1].split("_", 1)[0]
+            if seed_part.isdigit():
+                seed = seed_part
+    return run_name, demand, seed
+
+
+def _load_rule_based_baselines(log_path):
+    env_csv = os.environ.get("FAIR_TSC_BASELINE_CSV")
+    candidates = []
+    if env_csv:
+        candidates.append(env_csv)
+
+    base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "outputs"))
+    _run_name, demand, seed = _run_context_from_log(log_path)
+    if demand and seed:
+        candidates.extend(
+            glob.glob(os.path.join(base, f"rule_based_{demand}_s{seed}_*", "rule_based_baselines.csv"))
+        )
+    if demand:
+        candidates.extend(glob.glob(os.path.join(base, f"rule_based_{demand}_*", "rule_based_baselines.csv")))
+    candidates.extend(glob.glob(os.path.join(base, "rule_based_*", "rule_based_baselines.csv")))
+
+    existing = [path for path in candidates if os.path.exists(path)]
+    if not existing:
+        return pd.DataFrame(), None
+
+    baseline_path = sorted(set(existing), key=os.path.getmtime)[-1]
+    try:
+        return pd.read_csv(baseline_path), baseline_path
+    except Exception as exc:
+        print(f"Warning: failed to read baseline CSV {baseline_path}: {exc}")
+        return pd.DataFrame(), None
+
+
+def _overlay_baseline_lines(ax, baselines, column, transform=None):
+    if baselines is None or baselines.empty or column is None:
+        return
+    transform = transform or (lambda value, _row: value)
+    styles = {
+        "fixed_time": ("#7a7a7a", "--"),
+        "max_pressure": ("#c44e52", ":"),
+    }
+    for _, row in baselines.iterrows():
+        method = str(row.get("method", "baseline"))
+        if column not in row or pd.isna(row[column]):
+            continue
+        value = transform(float(row[column]), row)
+        color, linestyle = styles.get(method, ("#555555", "-."))
+        ax.axhline(value, color=color, linestyle=linestyle, lw=1.6, alpha=0.9, label=f"{method} baseline")
+
+
 def _plot_efficiency_components(df, log_path, reward_win):
+    baselines, baseline_path = _load_rule_based_baselines(log_path)
     fig, axes = plt.subplots(2, 2, figsize=(14, 9))
 
     ax = axes[0, 0]
@@ -78,9 +139,10 @@ def _plot_efficiency_components(df, log_path, reward_win):
             values = pd.to_numeric(df[col], errors="coerce")
             ax.plot(df.episode, values.rolling(reward_win, min_periods=1).mean(), label=label, lw=1.8)
             plotted = True
+    _overlay_baseline_lines(ax, baselines, "reward_env_component_sum")
     ax.set_title("Reward Components (rolling)")
     ax.set_xlabel("episode")
-    if plotted:
+    if plotted or not baselines.empty:
         ax.legend()
     ax.grid(alpha=0.3)
 
@@ -94,9 +156,10 @@ def _plot_efficiency_components(df, log_path, reward_win):
             values = pd.to_numeric(df[col], errors="coerce")
             ax.plot(df.episode, values.rolling(reward_win, min_periods=1).mean(), label=label, lw=1.8)
             plotted = True
+    _overlay_baseline_lines(ax, baselines, "vehicle_queue_mean")
     ax.set_title("Queue Components (rolling)")
     ax.set_xlabel("episode")
-    if plotted:
+    if plotted or not baselines.empty:
         ax.legend()
     ax.grid(alpha=0.3)
 
@@ -111,9 +174,10 @@ def _plot_efficiency_components(df, log_path, reward_win):
             values = pd.to_numeric(df[col], errors="coerce")
             ax.plot(df.episode, values.rolling(reward_win, min_periods=1).mean(), label=label, lw=1.5)
             plotted = True
+    _overlay_baseline_lines(ax, baselines, "teleported_total")
     ax.set_title("Gridlock / Teleport Diagnostics")
     ax.set_xlabel("episode")
-    if plotted:
+    if plotted or not baselines.empty:
         ax.legend()
     ax.grid(alpha=0.3)
 
@@ -127,14 +191,19 @@ def _plot_efficiency_components(df, log_path, reward_win):
             values = pd.to_numeric(df[col], errors="coerce")
             ax.plot(df.episode, values.rolling(reward_win, min_periods=1).mean(), label=label, lw=1.8)
             plotted = True
+    _overlay_baseline_lines(ax, baselines, "completion_rate_departed")
     ax.set_ylim(0.0, 1.05)
     ax.set_title("Completion Rate")
     ax.set_xlabel("episode")
-    if plotted:
+    if plotted or not baselines.empty:
         ax.legend()
     ax.grid(alpha=0.3)
 
-    fig.suptitle(os.path.basename(os.path.dirname(log_path)) + " - Efficiency Components", fontsize=14)
+    suffix = ""
+    if baseline_path:
+        suffix = f"\nrule baselines: {os.path.basename(os.path.dirname(baseline_path))}"
+        print(f"Using rule-based baselines from {baseline_path}")
+    fig.suptitle(os.path.basename(os.path.dirname(log_path)) + " - Efficiency Components" + suffix, fontsize=14)
     fig.tight_layout()
     out_path = os.path.join(os.path.dirname(log_path), "efficiency_components.png")
     fig.savefig(out_path, dpi=120, bbox_inches="tight")
