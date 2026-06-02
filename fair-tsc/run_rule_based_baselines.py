@@ -62,6 +62,9 @@ def _summarize(method: str, env: FairTSCEnv, coll: MetricsCollector, tripinfo_pa
         "max_phase_interval": float(env_metrics.get("max_phase_interval", 0.0) or 0.0),
     }
     row.update(_components(env, env_metrics))
+    # SUMO writes the closing tag for tripinfo on close; parse only after
+    # the output file is fully flushed.
+    env.close()
     attach_tripinfo_metrics(row, tripinfo_path, horizon_s=C.NUM_SECONDS)
     return row
 

@@ -75,7 +75,9 @@ def collect_one_episode(env, actor, critic, buffer, device, seed=None):
             last_probe = probe
             ped_wait_series.append(float(probe.get("agents_total_ped_waiting_time", 0.0)))
             ped_expected_series.append(float(probe.get("agents_total_expected_violations", 0.0)))
-            vehicle_queue_series.append(float(probe.get("agents_total_stopped", 0.0)))
+            vehicle_queue_series.append(
+                float(probe.get("agents_total_stopped", probe.get("system_total_stopped", 0.0)))
+            )
             ped_queue_series.append(float(probe.get("agents_total_ped_queued", 0.0)))
 
         for i, agent in enumerate(env.agent_ids):

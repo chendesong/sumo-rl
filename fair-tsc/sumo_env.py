@@ -155,6 +155,7 @@ class FairTSCEnv:
         c_s = {a: 0.0 for a in self.agent_ids}
         done_all = all(term_dict.get(a, False) or trunc_dict.get(a, False) for a in self.agent_ids)
 
+        self._inject_info_metrics(info_dict, self.get_live_efficiency_metrics(info_dict))
         self._inject_info_metrics(info_dict, self.get_simulation_progress_metrics())
         if done_all:
             self._inject_info_metrics(info_dict, self.get_phase_service_summary())
@@ -291,6 +292,39 @@ class FairTSCEnv:
             )
         except Exception:
             pass
+        return metrics
+
+    def get_live_efficiency_metrics(self, info: Optional[dict] = None) -> Dict[str, float]:
+        """Return per-step queue metrics used by reward/component logging.
+
+        The PettingZoo wrapper mirrors only agent-prefixed and system-prefixed
+        keys into each agent info dict, so aggregate keys such as
+        ``agents_total_stopped`` can disappear before the training loop sees
+        them.  Rehydrate those aggregate metrics here when they are missing.
+        """
+        probe = info
+        if isinstance(info, dict) and info and all(isinstance(v, dict) for v in info.values()):
+            probe = next(iter(info.values()))
+        if isinstance(probe, dict) and all(
+            key in probe for key in ("agents_total_stopped", "agents_total_ped_queued")
+        ):
+            return {}
+
+        metrics: Dict[str, float] = {}
+        try:
+            sumo_env = self._walk_to_sumo_env()
+            if hasattr(sumo_env, "_get_system_info"):
+                metrics.update(sumo_env._get_system_info())
+            if hasattr(sumo_env, "_get_per_agent_info"):
+                metrics.update(sumo_env._get_per_agent_info())
+        except Exception:
+            pass
+
+        if "agents_total_stopped" not in metrics and "system_total_stopped" in metrics:
+            metrics["agents_total_stopped"] = float(metrics.get("system_total_stopped", 0.0) or 0.0)
+        metrics.setdefault("agents_total_ped_queued", 0.0)
+        metrics.setdefault("agents_total_ped_waiting_time", 0.0)
+        metrics.setdefault("agents_total_expected_violations", 0.0)
         return metrics
 
     @staticmethod

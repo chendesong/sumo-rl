@@ -92,18 +92,24 @@ def parse_tripinfo(path: str, horizon_s: float) -> Dict[str, float]:
     time_losses = []
 
     if path and os.path.exists(path) and os.path.getsize(path) > 0:
-        for _event, elem in ET.iterparse(path, events=("end",)):
-            if elem.tag == "tripinfo":
-                for key, store in (
-                    ("duration", durations),
-                    ("waitingTime", waiting_times),
-                    ("timeLoss", time_losses),
-                ):
-                    try:
-                        store.append(float(elem.attrib.get(key, "0")))
-                    except (TypeError, ValueError):
-                        store.append(0.0)
-                elem.clear()
+        try:
+            iterator = ET.iterparse(path, events=("end",))
+            for _event, elem in iterator:
+                if elem.tag == "tripinfo":
+                    for key, store in (
+                        ("duration", durations),
+                        ("waitingTime", waiting_times),
+                        ("timeLoss", time_losses),
+                    ):
+                        try:
+                            store.append(float(elem.attrib.get(key, "0")))
+                        except (TypeError, ValueError):
+                            store.append(0.0)
+                    elem.clear()
+        except ET.ParseError:
+            # A partially flushed tripinfo file should not crash a long
+            # comparison run; keep whatever complete tripinfo rows were read.
+            pass
 
     completed = len(durations)
     hours = max(float(horizon_s) / 3600.0, 1e-9)
@@ -342,7 +348,9 @@ class MetricsCollector:
             self.wait_series.append(float(probe.get("system_total_waiting_time", 0.0)))
             self.ped_wait_series.append(float(probe.get("agents_total_ped_waiting_time", 0.0)))
             self.ped_expected_series.append(float(probe.get("agents_total_expected_violations", 0.0)))
-            self.vehicle_queue_series.append(float(probe.get("agents_total_stopped", 0.0)))
+            self.vehicle_queue_series.append(
+                float(probe.get("agents_total_stopped", probe.get("system_total_stopped", 0.0)))
+            )
             self.ped_queue_series.append(float(probe.get("agents_total_ped_queued", 0.0)))
             self.departed_total += float(probe.get("simulation_departed_number", 0.0) or 0.0)
             self.arrived_total += float(probe.get("simulation_arrived_number", 0.0) or 0.0)
