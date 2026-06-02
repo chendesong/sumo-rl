@@ -97,6 +97,11 @@ def main():
             "reward_mean",
             "reward_min",
             "reward_max",
+            "reward_vehicle_component",
+            "reward_ped_component",
+            "reward_env_component_sum",
+            "vehicle_queue_mean",
+            "ped_queue_mean",
             *[f"reward_{a}" for a in env.agent_ids],
             "theil_inter",
             "theil_intra",
@@ -161,6 +166,11 @@ def main():
 
             rewards = np.asarray(list(ep_reward.values()), dtype=np.float64)
             env_metrics = coll.finalize(env)
+            vehicle_queue_series = env_metrics.get("agents_total_stopped_series", [])
+            ped_queue_series = env_metrics.get("agents_total_ped_queued_series", [])
+            denom = max(float(env.num_agents) * float(C.REWARD_SCALE), 1e-9)
+            reward_vehicle_component = -float(np.sum(vehicle_queue_series)) / denom
+            reward_ped_component = -float(C.OMEGA_P) * float(np.sum(ped_queue_series)) / denom
             completion_rate_departed = (
                 float(env_metrics.get("arrived_total", 0.0) or 0.0)
                 / max(float(env_metrics.get("departed_total", 0.0) or 0.0), 1.0)
@@ -176,6 +186,11 @@ def main():
                 "reward_mean": float(rewards.mean()),
                 "reward_min": float(rewards.min()),
                 "reward_max": float(rewards.max()),
+                "reward_vehicle_component": reward_vehicle_component,
+                "reward_ped_component": reward_ped_component,
+                "reward_env_component_sum": reward_vehicle_component + reward_ped_component,
+                "vehicle_queue_mean": _mean(vehicle_queue_series),
+                "ped_queue_mean": _mean(ped_queue_series),
                 **{f"reward_{a}": float(ep_reward[a]) for a in env.agent_ids},
                 "theil_inter": np.nan,
                 "theil_intra": float(env_metrics.get("theil_intra", 0.0) or 0.0),

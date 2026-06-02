@@ -57,6 +57,83 @@ def _print_window_stats(df, window, columns):
         print(f"  {label:24s} {values.mean():+10.4f} +/- {values.std(ddof=0):.4f}")
 
 
+def _plot_efficiency_components(df, log_path, reward_win):
+    fig, axes = plt.subplots(2, 2, figsize=(14, 9))
+
+    ax = axes[0, 0]
+    plotted = False
+    for col, label in [
+        ("reward_vehicle_component", "vehicle term"),
+        ("reward_ped_component", "pedestrian term"),
+        ("reward_env_component_sum", "vehicle + pedestrian"),
+    ]:
+        if col in df.columns:
+            values = pd.to_numeric(df[col], errors="coerce")
+            ax.plot(df.episode, values.rolling(reward_win, min_periods=1).mean(), label=label, lw=1.8)
+            plotted = True
+    ax.set_title("Reward Components (rolling)")
+    ax.set_xlabel("episode")
+    if plotted:
+        ax.legend()
+    ax.grid(alpha=0.3)
+
+    ax = axes[0, 1]
+    plotted = False
+    for col, label in [
+        ("vehicle_queue_mean", "vehicle queue mean"),
+        ("ped_queue_mean", "pedestrian queue mean"),
+    ]:
+        if col in df.columns:
+            values = pd.to_numeric(df[col], errors="coerce")
+            ax.plot(df.episode, values.rolling(reward_win, min_periods=1).mean(), label=label, lw=1.8)
+            plotted = True
+    ax.set_title("Queue Components (rolling)")
+    ax.set_xlabel("episode")
+    if plotted:
+        ax.legend()
+    ax.grid(alpha=0.3)
+
+    ax = axes[1, 0]
+    plotted = False
+    for col, label in [
+        ("teleported_total", "teleported total"),
+        ("pending_vehicle_count", "pending vehicles"),
+        ("active_vehicle_count", "active vehicles"),
+    ]:
+        if col in df.columns:
+            values = pd.to_numeric(df[col], errors="coerce")
+            ax.plot(df.episode, values.rolling(reward_win, min_periods=1).mean(), label=label, lw=1.5)
+            plotted = True
+    ax.set_title("Gridlock / Teleport Diagnostics")
+    ax.set_xlabel("episode")
+    if plotted:
+        ax.legend()
+    ax.grid(alpha=0.3)
+
+    ax = axes[1, 1]
+    plotted = False
+    for col, label in [
+        ("completion_rate_departed", "completion / departed"),
+        ("completion_rate_demand", "completion / demand"),
+    ]:
+        if col in df.columns:
+            values = pd.to_numeric(df[col], errors="coerce")
+            ax.plot(df.episode, values.rolling(reward_win, min_periods=1).mean(), label=label, lw=1.8)
+            plotted = True
+    ax.set_ylim(0.0, 1.05)
+    ax.set_title("Completion Rate")
+    ax.set_xlabel("episode")
+    if plotted:
+        ax.legend()
+    ax.grid(alpha=0.3)
+
+    fig.suptitle(os.path.basename(os.path.dirname(log_path)) + " - Efficiency Components", fontsize=14)
+    fig.tight_layout()
+    out_path = os.path.join(os.path.dirname(log_path), "efficiency_components.png")
+    fig.savefig(out_path, dpi=120, bbox_inches="tight")
+    print(f"Saved {out_path}")
+
+
 def main_one(log_path):
     print(f"Reading {log_path}")
     df = pd.read_csv(log_path)
@@ -182,6 +259,7 @@ def main_one(log_path):
     out_path = os.path.join(os.path.dirname(log_path), "training_curves.png")
     fig.savefig(out_path, dpi=110, bbox_inches="tight")
     print(f"Saved {out_path}")
+    _plot_efficiency_components(df, log_path, reward_win)
 
     print("\n=== Summary ===")
     print(f"Total episodes: {len(df)}  (Stage 1: {len(s1)}, Stage 2: {len(s2)})")

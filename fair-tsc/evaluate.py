@@ -318,6 +318,8 @@ class MetricsCollector:
         self.wait_series = []
         self.ped_wait_series = []
         self.ped_expected_series = []
+        self.vehicle_queue_series = []
+        self.ped_queue_series = []
         self.reward_series = []
         self.phase_metrics = {}
         self.departed_total = 0.0
@@ -340,6 +342,8 @@ class MetricsCollector:
             self.wait_series.append(float(probe.get("system_total_waiting_time", 0.0)))
             self.ped_wait_series.append(float(probe.get("agents_total_ped_waiting_time", 0.0)))
             self.ped_expected_series.append(float(probe.get("agents_total_expected_violations", 0.0)))
+            self.vehicle_queue_series.append(float(probe.get("agents_total_stopped", 0.0)))
+            self.ped_queue_series.append(float(probe.get("agents_total_ped_queued", 0.0)))
             self.departed_total += float(probe.get("simulation_departed_number", 0.0) or 0.0)
             self.arrived_total += float(probe.get("simulation_arrived_number", 0.0) or 0.0)
             self.loaded_total += float(probe.get("simulation_loaded_number", 0.0) or 0.0)
@@ -360,6 +364,8 @@ class MetricsCollector:
             "system_total_waiting_time_series": self.wait_series,
             "agents_total_ped_waiting_time_series": self.ped_wait_series,
             "agents_total_expected_violations_series": self.ped_expected_series,
+            "agents_total_stopped_series": self.vehicle_queue_series,
+            "agents_total_ped_queued_series": self.ped_queue_series,
             "reward_series": self.reward_series,
         }
         out.update(self.phase_metrics)
