@@ -2,7 +2,7 @@
 
 <configuration>
     <input>
-        <net-file value="4x4_fixed_yellow.net.xml"/>
+        <net-file value="4x4_ped_yellow.net.xml"/>
         <route-files value="4x4_curriculum_mhu.rou.xml"/>
     </input>
     <time>

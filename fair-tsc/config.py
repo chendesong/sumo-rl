@@ -32,7 +32,7 @@ if DEMAND_LEVEL not in DEMAND_LEVELS:
     raise ValueError(f"FAIR_TSC_DEMAND must be one of: {', '.join(sorted(DEMAND_LEVELS))}")
 
 _NET_NAME = (
-    "4x4_fixed_yellow.net.xml"
+    "4x4_ped_yellow.net.xml"
     if DEMAND_LEVEL in {"ultra_stress", "curriculum_lmh", "curriculum_mhu"}
     else "4x4.net.xml"
 )

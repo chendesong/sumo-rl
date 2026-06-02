@@ -32,6 +32,13 @@ def _rolling_window(df, default=20):
     return max(1, min(default, len(df) // 5))
 
 
+def _fairness_enabled(df):
+    if "fairness_enabled" not in df.columns:
+        return not bool(len(df)) or "mappo_calib" not in str(df.attrs.get("run_name", ""))
+    values = pd.to_numeric(df["fairness_enabled"], errors="coerce").dropna()
+    return bool(len(values) and values.max() > 0)
+
+
 REWARD_DIAGNOSTIC_COLS = {
     "reward_vehicle_component",
     "reward_ped_component",
@@ -137,8 +144,10 @@ def _plot_efficiency_components(df, log_path, reward_win):
 def main_one(log_path):
     print(f"Reading {log_path}")
     df = pd.read_csv(log_path)
+    df.attrs["run_name"] = os.path.basename(os.path.dirname(log_path))
     s1 = df[df.stage == 1]
     s2 = df[df.stage == 2]
+    is_fair_run = _fairness_enabled(df)
 
     fig, axes = plt.subplots(3, 3, figsize=(18, 12))
 
@@ -211,8 +220,27 @@ def main_one(log_path):
     ax.grid(alpha=0.3)
 
     ax = axes[1, 1]
-    _plot_if_present(ax, s2, "episode", [("lambda_fair", "lambda_fair"), ("C_fair_ema", "C_fair EMA"), ("fair_target", "target")])
-    ax.set_title("PID Fairness Weight")
+    if is_fair_run:
+        _plot_if_present(
+            ax,
+            s2,
+            "episode",
+            [("lambda_fair", "lambda_fair"), ("C_fair_ema", "C_fair EMA"), ("fair_target", "target")],
+        )
+        ax.set_title("PID Fairness Weight")
+    else:
+        for col, label in [
+            ("vehicle_queue_mean", "vehicle queue"),
+            ("ped_queue_mean", "pedestrian queue"),
+        ]:
+            if col in s2.columns:
+                ax.plot(
+                    s2.episode,
+                    s2[col].rolling(fair_win, min_periods=1).mean(),
+                    label=f"{label} rolling",
+                    lw=1.8,
+                )
+        ax.set_title("Queue Components")
     ax.set_xlabel("episode")
     ax.legend()
     ax.grid(alpha=0.3)
@@ -274,7 +302,7 @@ def main_one(log_path):
         print(f"T_inter last mean:      {tail.theil_inter.mean():.6f}")
         print(f"T_intra last mean:      {tail.theil_intra.mean():.6f}")
         print(f"Max phase interval:     {tail.max_phase_interval.mean():.2f}")
-        if "lambda_fair" in tail.columns:
+        if is_fair_run and "lambda_fair" in tail.columns:
             print(f"lambda_fair end:        {tail.lambda_fair.iloc[-1]:.6f}")
         diagnostic_cols = [
             ("reward_mean", "reward mean"),
