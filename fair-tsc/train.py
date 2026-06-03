@@ -215,6 +215,66 @@ def write_row(writer, base, stats):
     writer.writerow(row)
 
 
+def _load_torch_ckpt(path: str, device):
+    try:
+        return torch.load(path, map_location=device, weights_only=False)
+    except TypeError:
+        return torch.load(path, map_location=device)
+
+
+def _load_first_state(module, ckpt: dict, keys, label: str) -> str:
+    for key in keys:
+        state = ckpt.get(key)
+        if state is None:
+            continue
+        module.load_state_dict(state)
+        return key
+    raise KeyError(f"checkpoint does not contain any {label} keys: {keys}")
+
+
+def load_ue_reference_if_requested(actor_ue, critic_ue, env, device) -> bool:
+    """Load an external UE/IPPO reference critic for sacrifice-gap fairness."""
+    if not C.UE_CKPT:
+        if C.FAIRNESS_ENABLED and C.FAIR_ALPHA > 0.0 and C.T_WARM <= 0:
+            raise ValueError(
+                "FAIR_TSC_T_WARM=0 with inter fairness requires FAIR_TSC_UE_CKPT. "
+                "Use a checkpoint containing critic_ue, critic_ippo, or critic_marl."
+            )
+        return False
+
+    path = os.path.expanduser(C.UE_CKPT)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"FAIR_TSC_UE_CKPT not found: {path}")
+    ckpt = _load_torch_ckpt(path, device)
+    if not isinstance(ckpt, dict):
+        raise TypeError(f"FAIR_TSC_UE_CKPT must be a torch checkpoint dict: {path}")
+
+    for meta_key, current in [
+        ("global_obs_dim", env.global_obs_dim),
+        ("local_obs_dim", env.local_obs_dim),
+        ("num_agents", env.num_agents),
+        ("action_dim", env.action_dim),
+    ]:
+        saved = ckpt.get(meta_key)
+        if saved is not None and int(saved) != int(current):
+            raise ValueError(
+                f"FAIR_TSC_UE_CKPT {meta_key} mismatch: checkpoint={saved}, current={current}"
+            )
+
+    critic_key = _load_first_state(critic_ue, ckpt, ("critic_ue", "critic_ippo", "critic_marl"), "critic")
+    actor_key = None
+    try:
+        actor_key = _load_first_state(actor_ue, ckpt, ("actor_ue", "actor_ippo", "actor_marl"), "actor")
+    except KeyError:
+        pass
+
+    print(
+        f"[UE reference] loaded {path}  critic_key={critic_key}"
+        + (f" actor_key={actor_key}" if actor_key else " actor_key=<not loaded>")
+    )
+    return True
+
+
 def main():
     torch.manual_seed(C.SEED)
     np.random.seed(C.SEED)
@@ -231,6 +291,7 @@ def main():
         f"sumo teleport={C.TIME_TO_TELEPORT}s  actor_lr={C.ACTOR_LR:g} "
         f"critic_lr={C.CRITIC_LR:g} minibatch={C.MINIBATCH_SIZE}"
     )
+    print(f"UE reference ckpt = {C.UE_CKPT or '<stage-1 warmup>'}")
     print(f"route file = {C.ROUTE_FILE}")
 
     os.makedirs(C.OUTPUT_DIR, exist_ok=True)
@@ -264,6 +325,7 @@ def main():
     opt_critic_marl = torch.optim.Adam(critic_marl.parameters(), lr=C.CRITIC_LR)
     opt_actor_ue = torch.optim.Adam(actor_ue.parameters(), lr=C.ACTOR_LR)
     opt_critic_ue = torch.optim.Adam(critic_ue.parameters(), lr=C.CRITIC_LR)
+    external_ue_loaded = load_ue_reference_if_requested(actor_ue, critic_ue, env, device)
 
     pid = PIDFairnessController(
         target=C.FAIR_C_TARGET,
@@ -351,7 +413,9 @@ def main():
     agent_idx_to_id = {i: a for i, a in enumerate(env.agent_ids)}
 
     print(f"\n{'=' * 70}\nSTAGE 1: UE warm-up   target={C.T_WARM} steps\n{'=' * 70}")
-    while global_step < C.T_WARM:
+    if external_ue_loaded:
+        print("[STAGE1] external UE reference loaded; warm-up can be skipped with FAIR_TSC_T_WARM=0.")
+    while (not external_ue_loaded) and global_step < C.T_WARM:
         buffer = RolloutBuffer(env.agent_ids, env.num_agents)
         ep_reward, n, safety, reward_norm, reward_components, sim_metrics = collect_one_episode(
             env, actor_ue, critic_ue, buffer, device, seed=C.SEED + episode

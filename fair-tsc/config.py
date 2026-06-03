@@ -102,6 +102,7 @@ if FAIR_CREDIT_MODE not in {"per_agent", "global", "none"}:
 # FAIRNESS_ENABLED=False, then replace these with the final-episode means.
 T_INTER_0 = float(os.environ.get("FAIR_TSC_T_INTER_0", "1.0"))
 T_INTRA_0 = float(os.environ.get("FAIR_TSC_T_INTRA_0", "1.0"))
+UE_CKPT = os.environ.get("FAIR_TSC_UE_CKPT", "").strip()
 
 FAIR_C_TARGET = float(os.environ.get("FAIR_TSC_C_TARGET", "1.0"))
 FAIR_EPS = 1e-6
