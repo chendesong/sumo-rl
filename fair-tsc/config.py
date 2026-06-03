@@ -68,7 +68,9 @@ SEED = int(os.environ.get("FAIR_TSC_SEED", "42"))
 
 _TS = time.strftime("%Y%m%d_%H%M")
 RUN_PREFIX = "fair_tsc" if FAIRNESS_ENABLED else "mappo_calib"
-RUN_NAME = f"{RUN_PREFIX}_4x4_{DEMAND_LEVEL}_s{SEED}_{_TS}"
+RUN_TAG = os.environ.get("FAIR_TSC_RUN_TAG", "").strip()
+_RUN_TAG_PART = f"_{RUN_TAG}" if RUN_TAG else ""
+RUN_NAME = f"{RUN_PREFIX}_4x4_{DEMAND_LEVEL}_s{SEED}{_RUN_TAG_PART}_{_TS}"
 OUTPUT_DIR = os.path.join(BASE_DIR, "outputs", RUN_NAME)
 CKPT_DIR = os.path.join(BASE_DIR, "checkpoints", RUN_NAME)
 
