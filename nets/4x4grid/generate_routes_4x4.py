@@ -51,6 +51,9 @@ Curriculum demand:
       curriculum_lmh: low-like -> medium-like -> high-like
       curriculum_lmhu: low-like -> medium-like -> high-like -> ultra-like,
                        with a stronger pedestrian stream
+      curriculum_lmhu_ped: same vehicle stream as curriculum_lmhu, but
+                           pedestrian demand is raised to one third of
+                           vehicle demand
       curriculum_mhu: medium-like -> high-like -> ultra-stress
 """
 
@@ -81,6 +84,12 @@ CURRICULUMS = {
         ("medium", 900.0, 1800.0, 350.0, 55.0),
         ("high", 1800.0, 2700.0, 450.0, 70.0),
         ("ultra_stress", 2700.0, 3600.0, 550.0, 85.0),
+    ],
+    "curriculum_lmhu_ped": [
+        ("low", 0.0, 900.0, 250.0, 250.0 / 3.0),
+        ("medium", 900.0, 1800.0, 350.0, 350.0 / 3.0),
+        ("high", 1800.0, 2700.0, 450.0, 450.0 / 3.0),
+        ("ultra_stress", 2700.0, 3600.0, 550.0, 550.0 / 3.0),
     ],
     "curriculum_mhu": [
         ("medium", 0.0, 1200.0, 450.0, 45.0),
@@ -355,6 +364,7 @@ if __name__ == "__main__":
             "ultra_stress",
             "curriculum_lmh",
             "curriculum_lmhu",
+            "curriculum_lmhu_ped",
             "curriculum_mhu",
         ],
         help=f"Demand levels to generate. Choices: {', '.join([*DEMAND.keys(), *CURRICULUMS.keys()])}",
