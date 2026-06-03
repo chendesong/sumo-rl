@@ -39,6 +39,8 @@ from fairness import phase_service_theil_from_intervals
 
 
 TrafficSignal.omega_p = C.OMEGA_P
+TrafficSignal.omega_ped_wait = C.OMEGA_PED_WAIT
+TrafficSignal.ped_reward_mode = C.PED_REWARD_MODE
 
 
 class FairTSCEnv:

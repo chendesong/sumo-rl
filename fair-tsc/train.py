@@ -119,9 +119,17 @@ def collect_one_episode(env, actor, critic, buffer, device, seed=None):
         "ped_risk": normalize_pedestrian_risk(ped_expected, num_agents=env.num_agents),
     }
     denom = max(float(env.num_agents) * float(C.REWARD_SCALE), 1e-9)
+    ped_queue_sum = float(np.sum(ped_queue_series))
+    ped_wait_sum = float(np.sum(ped_wait_series))
+    if C.PED_REWARD_MODE == "wait":
+        ped_component_raw = float(C.OMEGA_PED_WAIT) * ped_wait_sum
+    elif C.PED_REWARD_MODE == "queue_wait":
+        ped_component_raw = float(C.OMEGA_P) * ped_queue_sum + float(C.OMEGA_PED_WAIT) * ped_wait_sum
+    else:
+        ped_component_raw = float(C.OMEGA_P) * ped_queue_sum
     reward_components = {
         "reward_vehicle_component": -float(np.sum(vehicle_queue_series)) / denom,
-        "reward_ped_component": -float(C.OMEGA_P) * float(np.sum(ped_queue_series)) / denom,
+        "reward_ped_component": -ped_component_raw / denom,
         "vehicle_queue_mean": _mean_or_zero(vehicle_queue_series),
         "ped_queue_mean": _mean_or_zero(ped_queue_series),
     }
@@ -288,6 +296,10 @@ def main():
         f"clip={C.REWARD_NORM_CLIP:g}"
     )
     print(
+        f"ped_reward_mode={C.PED_REWARD_MODE} omega_p={C.OMEGA_P:g} "
+        f"omega_ped_wait={C.OMEGA_PED_WAIT:g}"
+    )
+    print(
         f"sumo teleport={C.TIME_TO_TELEPORT}s  actor_lr={C.ACTOR_LR:g} "
         f"critic_lr={C.CRITIC_LR:g} minibatch={C.MINIBATCH_SIZE}"
     )
@@ -442,7 +454,9 @@ def main():
         elapsed = time.time() - t0
         print(
             f"[STAGE1] ep={episode:3d} step={global_step:6d}/{C.T_WARM} "
-            f"R={rewards.mean():+.1f} H={ppo_stats['entropy']:.3f} t={elapsed:.0f}s"
+            f"R={rewards.mean():+.1f} vehQ={reward_components['vehicle_queue_mean']:.1f} "
+            f"pedQ={reward_components['ped_queue_mean']:.1f} pedWait={safety['ped_wait']:.1f} "
+            f"H={ppo_stats['entropy']:.3f} t={elapsed:.0f}s"
         )
 
         write_row(
@@ -538,6 +552,8 @@ def main():
             f"R={rewards.mean():+.1f} Tinter={fair['theil_inter']:.4f} "
             f"Tintra={fair['theil_intra']:.4f} Cfair={fair['C_fair']:.4f} "
             f"lambda={pid_stats['lambda_fair']:.4f} H={ppo_stats['entropy']:.3f} "
+            f"vehQ={reward_components['vehicle_queue_mean']:.1f} "
+            f"pedQ={reward_components['ped_queue_mean']:.1f} pedWait={safety['ped_wait']:.1f} "
             f"tel={sim_metrics.get('simulation_teleported_total_env', 0.0):.0f} t={elapsed:.0f}s"
         )
         print(

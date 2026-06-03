@@ -86,7 +86,11 @@ STEPS_PER_EPISODE = NUM_SECONDS // DELTA_TIME
 
 
 # Reward
-OMEGA_P = 1.0
+PED_REWARD_MODE = os.environ.get("FAIR_TSC_PED_REWARD_MODE", "queue").lower()
+if PED_REWARD_MODE not in {"queue", "wait", "queue_wait"}:
+    raise ValueError("FAIR_TSC_PED_REWARD_MODE must be one of: queue, wait, queue_wait")
+OMEGA_P = float(os.environ.get("FAIR_TSC_OMEGA_P", "1.0"))
+OMEGA_PED_WAIT = float(os.environ.get("FAIR_TSC_OMEGA_PED_WAIT", "0.02"))
 REWARD_SCALE = 30.0
 REWARD_NORMALIZE = _env_bool("FAIR_TSC_REWARD_NORMALIZE", "1")
 REWARD_NORM_CENTER = _env_bool("FAIR_TSC_REWARD_NORM_CENTER", "0")

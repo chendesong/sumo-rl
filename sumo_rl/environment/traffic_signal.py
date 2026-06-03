@@ -46,10 +46,12 @@ class TrafficSignal:
     # Default min gap of SUMO (see https://sumo.dlr.de/docs/Simulation/Safety.html). Should this be parameterized?
     MIN_GAP = 2.5
 
-    # Pedestrian queue weight for the "queue-ped" reward (paper Eq. 15).
-    # Override at the class level (e.g. TrafficSignal.omega_p = ...) from the
-    # training entrypoint to wire it to a config value.
+    # Pedestrian weights for the "queue-ped" reward.
+    # Override at the class level from the training entrypoint to wire them to
+    # config values.
     omega_p: float = 1.0
+    omega_ped_wait: float = 0.02
+    ped_reward_mode: str = "queue"
 
     def __init__(
         self,
@@ -624,27 +626,32 @@ class TrafficSignal:
         )
 
     # ══════════════════════════════════════════════════════════
-    # Reward function — Paper Eq. (19)
-    # R_i(t) = -sum_k q_v(t) - omega_p * sum_c q_p(t)
+    # Reward function
+    # R_i(t) = -sum_k q_v(t) - pedestrian penalty
     # ══════════════════════════════════════════════════════════
 
     def _queue_ped_reward(self):
-        """Paper Eq. (19): queue-based local reward.
+        """Queue/wait based local reward.
 
-        R_i(t) = - sum_k q_{i,k}^v(t) - omega_p * sum_c q_{i,c}^p(t)
+        R_i(t) = - sum_k q_{i,k}^v(t) - pedestrian penalty
 
         Vehicle queue: total halting vehicles across all incoming lanes.
         Pedestrian queue: total waiting pedestrians across all 4 crossings.
-        omega_p (>0) weighs pedestrian queues relative to vehicle queues.
+        Pedestrian wait: total waiting seconds across all queued pedestrians.
 
         This reward is dense, low-variance, and well suited to on-policy
-        MARL training.  Soft constraints (vehicle unpatience, pedestrian
-        non-compliance, spillback) enter the main-method training via
-        Lagrange multipliers, not through this reward.
+        MARL training.
         """
         veh_queue = self.get_total_queued()
         ped_queue = self.get_total_pedestrian_queued()
-        return -float(veh_queue) - self.omega_p * float(ped_queue)
+        ped_wait = self.get_total_pedestrian_waiting_time()
+        if self.ped_reward_mode == "wait":
+            ped_penalty = self.omega_ped_wait * float(ped_wait)
+        elif self.ped_reward_mode == "queue_wait":
+            ped_penalty = self.omega_p * float(ped_queue) + self.omega_ped_wait * float(ped_wait)
+        else:
+            ped_penalty = self.omega_p * float(ped_queue)
+        return -float(veh_queue) - ped_penalty
 
     def _get_veh_list(self):
         veh_list = []
