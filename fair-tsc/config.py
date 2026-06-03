@@ -104,10 +104,16 @@ FAIR_CREDIT_MODE = os.environ.get("FAIR_TSC_CREDIT_MODE", "per_agent").lower()
 if FAIR_CREDIT_MODE not in {"per_agent", "global", "none"}:
     raise ValueError("FAIR_TSC_CREDIT_MODE must be one of: per_agent, global, none")
 
-# Placeholders for calibration. Run vanilla MAPPO with
-# FAIRNESS_ENABLED=False, then replace these with the final-episode means.
-T_INTER_0 = float(os.environ.get("FAIR_TSC_T_INTER_0", "1.0"))
-T_INTRA_0 = float(os.environ.get("FAIR_TSC_T_INTRA_0", "1.0"))
+# Calibration references. Environment variables still take precedence; the
+# LMHU intra reference is fixed from the seed-45/46 intra-only sensitivity run.
+_DEFAULT_T_INTER_0 = {
+    "curriculum_lmhu": "0.15",
+}
+_DEFAULT_T_INTRA_0 = {
+    "curriculum_lmhu": "0.219",
+}
+T_INTER_0 = float(os.environ.get("FAIR_TSC_T_INTER_0", _DEFAULT_T_INTER_0.get(DEMAND_LEVEL, "1.0")))
+T_INTRA_0 = float(os.environ.get("FAIR_TSC_T_INTRA_0", _DEFAULT_T_INTRA_0.get(DEMAND_LEVEL, "1.0")))
 UE_CKPT = os.environ.get("FAIR_TSC_UE_CKPT", "").strip()
 
 FAIR_C_TARGET = float(os.environ.get("FAIR_TSC_C_TARGET", "1.0"))
