@@ -64,6 +64,143 @@ def _print_window_stats(df, window, columns):
         print(f"  {label:24s} {values.mean():+10.4f} +/- {values.std(ddof=0):.4f}")
 
 
+def _mean_num(df, col):
+    if col not in df.columns or len(df) == 0:
+        return np.nan
+    values = pd.to_numeric(df[col], errors="coerce").dropna()
+    return float(values.mean()) if len(values) else np.nan
+
+
+def _fmt(value, digits=4):
+    if value is None or pd.isna(value):
+        return "nan"
+    return f"{float(value):.{digits}f}"
+
+
+def _print_run_context(df, log_path, is_fair_run):
+    run_name, demand, seed = _run_context_from_log(log_path)
+    print("\n=== Run Context ===")
+    print(f"run_name:          {run_name}")
+    print(f"demand:            {demand}")
+    print(f"seed:              {seed}")
+    print(f"fairness_enabled:  {int(is_fair_run)}")
+    for col, label in [
+        ("fair_credit_mode", "credit_mode"),
+        ("fair_target", "fair_target"),
+        ("reward_norm_enabled", "reward_norm"),
+        ("reward_norm_mean", "reward_norm_mean_last"),
+        ("reward_norm_var", "reward_norm_var_last"),
+    ]:
+        if col not in df.columns:
+            continue
+        value = df[col].dropna().iloc[-1] if len(df[col].dropna()) else ""
+        print(f"{label:18s} {value}")
+
+
+def _print_baseline_comparison(log_path, tail):
+    baselines, baseline_path = _load_rule_based_baselines(log_path)
+    if baselines is None or baselines.empty:
+        print("\n=== Rule Baseline Comparison ===")
+        print("No matching rule_based_baselines.csv found.")
+        return
+
+    print("\n=== Rule Baseline Comparison ===")
+    print(f"baseline_csv: {baseline_path}")
+    run_means = {
+        "vehicle_queue_mean": _mean_num(tail, "vehicle_queue_mean"),
+        "ped_queue_mean": _mean_num(tail, "ped_queue_mean"),
+        "teleported_total": _mean_num(tail, "teleported_total"),
+        "completion_rate_departed": _mean_num(tail, "completion_rate_departed"),
+        "max_phase_interval": _mean_num(tail, "max_phase_interval"),
+    }
+    print(
+        "run last-window: "
+        f"vehQ={_fmt(run_means['vehicle_queue_mean'], 2)} "
+        f"pedQ={_fmt(run_means['ped_queue_mean'], 2)} "
+        f"tele={_fmt(run_means['teleported_total'], 2)} "
+        f"completion={_fmt(run_means['completion_rate_departed'], 4)} "
+        f"maxPhase={_fmt(run_means['max_phase_interval'], 1)}"
+    )
+    for _, row in baselines.iterrows():
+        method = row.get("method", "baseline")
+        parts = [f"{method}:"]
+        for col, label, digits in [
+            ("vehicle_queue_mean", "vehQ", 2),
+            ("ped_queue_mean", "pedQ", 2),
+            ("teleported_total", "tele", 2),
+            ("completion_rate_departed", "completion", 4),
+            ("max_phase_interval", "maxPhase", 1),
+        ]:
+            if col not in row or pd.isna(row[col]):
+                continue
+            val = float(row[col])
+            delta = run_means[col] - val if col in run_means and not pd.isna(run_means[col]) else np.nan
+            parts.append(f"{label}={_fmt(val, digits)} (run-baseline {delta:+.{digits}f})")
+        print("  " + "  ".join(parts))
+
+
+def _print_fairness_effect(s2):
+    if len(s2) == 0:
+        return
+    head = s2.head(min(20, len(s2)))
+    tail = s2.tail(min(20, len(s2)))
+    print("\n=== Fairness Effect First-vs-Last ===")
+    for col, label in [
+        ("theil_inter", "T_inter"),
+        ("theil_intra", "T_intra"),
+        ("C_fair_raw", "C_fair_raw"),
+        ("C_fair_ema", "C_fair_ema"),
+        ("lambda_fair", "lambda_fair"),
+        ("fair_penalty_mean", "fair_penalty_mean"),
+        ("fair_penalty_max", "fair_penalty_max"),
+        ("max_phase_interval", "max_phase_interval"),
+        ("delta_max", "delta_max"),
+        ("delta_mean", "delta_mean"),
+    ]:
+        if col not in s2.columns:
+            continue
+        first = _mean_num(head, col)
+        last = _mean_num(tail, col)
+        print(f"{label:20s} first={_fmt(first)}  last={_fmt(last)}  change={_fmt(last - first)}")
+
+
+def _print_per_agent_fairness(log_path, last_n=20):
+    path = os.path.join(os.path.dirname(log_path), "per_agent_log.csv")
+    print("\n=== Per-Agent Fairness Diagnostics ===")
+    if not os.path.exists(path):
+        print("No per_agent_log.csv found.")
+        return
+    df = pd.read_csv(path)
+    if df.empty:
+        print("per_agent_log.csv is empty.")
+        return
+    episodes = sorted(pd.to_numeric(df["episode"], errors="coerce").dropna().unique())
+    if not episodes:
+        print("No valid per-agent episodes.")
+        return
+    keep = set(episodes[-min(last_n, len(episodes)):])
+    tail = df[df["episode"].isin(keep)].copy()
+    numeric_cols = [c for c in ["delta_mean", "T_inter_i", "T_intra_i", "c_fair_i"] if c in tail.columns]
+    for col in numeric_cols:
+        tail[col] = pd.to_numeric(tail[col], errors="coerce")
+    grouped = tail.groupby("agent", as_index=False)[numeric_cols].mean()
+    if grouped.empty:
+        print("No grouped per-agent data.")
+        return
+    for col, title in [
+        ("c_fair_i", "highest fairness credit"),
+        ("T_inter_i", "highest inter contribution"),
+        ("T_intra_i", "highest intra contribution"),
+        ("delta_mean", "largest sacrifice gap"),
+    ]:
+        if col not in grouped.columns:
+            continue
+        print(f"\nTop agents by {title}:")
+        for _, row in grouped.sort_values(col, ascending=False).head(5).iterrows():
+            details = " ".join(f"{c}={_fmt(row[c])}" for c in numeric_cols)
+            print(f"  {row['agent']}: {details}")
+
+
 def _run_context_from_log(log_path):
     run_name = os.path.basename(os.path.dirname(log_path))
     demand = None
@@ -366,6 +503,7 @@ def main_one(log_path):
     _plot_efficiency_components(df, log_path, reward_win)
 
     print("\n=== Summary ===")
+    _print_run_context(df, log_path, is_fair_run)
     print(f"Total episodes: {len(df)}  (Stage 1: {len(s1)}, Stage 2: {len(s2)})")
     print(f"Total steps:    {df.global_step.iloc[-1]}")
     print(f"Wall time:      {df.wall_time_s.iloc[-1] / 60:.1f} min")
@@ -397,6 +535,10 @@ def main_one(log_path):
         ]
         _print_window_stats(s2, 20, diagnostic_cols)
         _print_window_stats(s2, 50, diagnostic_cols)
+        _print_baseline_comparison(log_path, tail)
+        if is_fair_run:
+            _print_fairness_effect(s2)
+            _print_per_agent_fairness(log_path, last_n=20)
 
 
 def main_multi(log_paths):
