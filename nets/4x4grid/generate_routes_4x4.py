@@ -52,7 +52,7 @@ Curriculum demand:
       curriculum_lmhu: low-like -> medium-like -> high-like -> ultra-like,
                        with a stronger pedestrian stream
       curriculum_lmhu_ped: same vehicle stream as curriculum_lmhu, but
-                           pedestrian demand is raised to one third of
+                           pedestrian demand is raised to two thirds of
                            vehicle demand
       curriculum_mhu: medium-like -> high-like -> ultra-stress
 """
@@ -86,10 +86,10 @@ CURRICULUMS = {
         ("ultra_stress", 2700.0, 3600.0, 550.0, 85.0),
     ],
     "curriculum_lmhu_ped": [
-        ("low", 0.0, 900.0, 250.0, 250.0 / 3.0),
-        ("medium", 900.0, 1800.0, 350.0, 350.0 / 3.0),
-        ("high", 1800.0, 2700.0, 450.0, 450.0 / 3.0),
-        ("ultra_stress", 2700.0, 3600.0, 550.0, 550.0 / 3.0),
+        ("low", 0.0, 900.0, 250.0, 2.0 * 250.0 / 3.0),
+        ("medium", 900.0, 1800.0, 350.0, 2.0 * 350.0 / 3.0),
+        ("high", 1800.0, 2700.0, 450.0, 2.0 * 450.0 / 3.0),
+        ("ultra_stress", 2700.0, 3600.0, 550.0, 2.0 * 550.0 / 3.0),
     ],
     "curriculum_mhu": [
         ("medium", 0.0, 1200.0, 450.0, 45.0),

@@ -4,7 +4,7 @@
 <routes>
     <vType id="ped_wait_hazard" vClass="pedestrian" impatience="0.0" jmIgnoreFoeProb="0.0" jmDriveAfterRedTime="-1"/>
     <!-- demand=curriculum_lmhu_ped: same ultra-stress OD, staged 0-900 low, 900-1800 medium, 1800-2700 high, 2700-3600 ultra_stress -->
-    <!-- segment=low: begin=0, end=900, 3840 veh/h + 1280 ped/h -->
+    <!-- segment=low: begin=0, end=900, 3840 veh/h + 2560 ped/h -->
     <flow id="f_low_-h11_to_-h15" begin="0.00" end="900.00" perHour="115.00" from="-h11" to="-h15" departLane="best" departSpeed="max"/>
     <flow id="f_low_-h21_to_-h15" begin="0.00" end="900.00" perHour="365.00" from="-h21" to="-h15" departLane="best" departSpeed="max"/>
     <flow id="f_low_-h31_to_-h45" begin="0.00" end="900.00" perHour="365.00" from="-h31" to="-h45" departLane="best" departSpeed="max"/>
@@ -21,55 +21,55 @@
     <flow id="f_low_v25_to_v41" begin="0.00" end="900.00" perHour="365.00" from="v25" to="v41" departLane="best" departSpeed="max"/>
     <flow id="f_low_v35_to_v11" begin="0.00" end="900.00" perHour="365.00" from="v35" to="v11" departLane="best" departSpeed="max"/>
     <flow id="f_low_v45_to_v41" begin="0.00" end="900.00" perHour="115.00" from="v45" to="v41" departLane="best" departSpeed="max"/>
-    <personFlow id="pf_low_-h11_to_-v15" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="38.33">
+    <personFlow id="pf_low_-h11_to_-v15" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="76.67">
         <personTrip from="-h11" to="-v15"/>
     </personFlow>
-    <personFlow id="pf_low_-h21_to_-v15" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="121.67">
+    <personFlow id="pf_low_-h21_to_-v15" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="243.33">
         <personTrip from="-h21" to="-v15"/>
     </personFlow>
-    <personFlow id="pf_low_-h31_to_-v45" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="121.67">
+    <personFlow id="pf_low_-h31_to_-v45" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="243.33">
         <personTrip from="-h31" to="-v45"/>
     </personFlow>
-    <personFlow id="pf_low_-h41_to_-v45" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="38.33">
+    <personFlow id="pf_low_-h41_to_-v45" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="76.67">
         <personTrip from="-h41" to="-v45"/>
     </personFlow>
-    <personFlow id="pf_low_h15_to_v11" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="38.33">
+    <personFlow id="pf_low_h15_to_v11" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="76.67">
         <personTrip from="h15" to="v11"/>
     </personFlow>
-    <personFlow id="pf_low_h25_to_v11" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="121.67">
+    <personFlow id="pf_low_h25_to_v11" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="243.33">
         <personTrip from="h25" to="v11"/>
     </personFlow>
-    <personFlow id="pf_low_h35_to_v41" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="121.67">
+    <personFlow id="pf_low_h35_to_v41" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="243.33">
         <personTrip from="h35" to="v41"/>
     </personFlow>
-    <personFlow id="pf_low_h45_to_v41" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="38.33">
+    <personFlow id="pf_low_h45_to_v41" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="76.67">
         <personTrip from="h45" to="v41"/>
     </personFlow>
-    <personFlow id="pf_low_-v11_to_-h15" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="38.33">
+    <personFlow id="pf_low_-v11_to_-h15" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="76.67">
         <personTrip from="-v11" to="-h15"/>
     </personFlow>
-    <personFlow id="pf_low_-v21_to_-h45" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="121.67">
+    <personFlow id="pf_low_-v21_to_-h45" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="243.33">
         <personTrip from="-v21" to="-h45"/>
     </personFlow>
-    <personFlow id="pf_low_-v31_to_-h15" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="121.67">
+    <personFlow id="pf_low_-v31_to_-h15" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="243.33">
         <personTrip from="-v31" to="-h15"/>
     </personFlow>
-    <personFlow id="pf_low_-v41_to_-h45" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="38.33">
+    <personFlow id="pf_low_-v41_to_-h45" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="76.67">
         <personTrip from="-v41" to="-h45"/>
     </personFlow>
-    <personFlow id="pf_low_v15_to_h11" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="38.33">
+    <personFlow id="pf_low_v15_to_h11" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="76.67">
         <personTrip from="v15" to="h11"/>
     </personFlow>
-    <personFlow id="pf_low_v25_to_h41" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="121.67">
+    <personFlow id="pf_low_v25_to_h41" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="243.33">
         <personTrip from="v25" to="h41"/>
     </personFlow>
-    <personFlow id="pf_low_v35_to_h11" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="121.67">
+    <personFlow id="pf_low_v35_to_h11" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="243.33">
         <personTrip from="v35" to="h11"/>
     </personFlow>
-    <personFlow id="pf_low_v45_to_h41" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="38.33">
+    <personFlow id="pf_low_v45_to_h41" type="ped_wait_hazard" begin="0.00" end="900.00" perHour="76.67">
         <personTrip from="v45" to="h41"/>
     </personFlow>
-    <!-- segment=medium: begin=900, end=1800, 5376 veh/h + 1792 ped/h -->
+    <!-- segment=medium: begin=900, end=1800, 5376 veh/h + 3584 ped/h -->
     <flow id="f_medium_-h11_to_-h15" begin="900.00" end="1800.00" perHour="161.00" from="-h11" to="-h15" departLane="best" departSpeed="max"/>
     <flow id="f_medium_-h21_to_-h15" begin="900.00" end="1800.00" perHour="511.00" from="-h21" to="-h15" departLane="best" departSpeed="max"/>
     <flow id="f_medium_-h31_to_-h45" begin="900.00" end="1800.00" perHour="511.00" from="-h31" to="-h45" departLane="best" departSpeed="max"/>
@@ -86,55 +86,55 @@
     <flow id="f_medium_v25_to_v41" begin="900.00" end="1800.00" perHour="511.00" from="v25" to="v41" departLane="best" departSpeed="max"/>
     <flow id="f_medium_v35_to_v11" begin="900.00" end="1800.00" perHour="511.00" from="v35" to="v11" departLane="best" departSpeed="max"/>
     <flow id="f_medium_v45_to_v41" begin="900.00" end="1800.00" perHour="161.00" from="v45" to="v41" departLane="best" departSpeed="max"/>
-    <personFlow id="pf_medium_-h11_to_-v15" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="53.67">
+    <personFlow id="pf_medium_-h11_to_-v15" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="107.33">
         <personTrip from="-h11" to="-v15"/>
     </personFlow>
-    <personFlow id="pf_medium_-h21_to_-v15" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="170.33">
+    <personFlow id="pf_medium_-h21_to_-v15" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="340.67">
         <personTrip from="-h21" to="-v15"/>
     </personFlow>
-    <personFlow id="pf_medium_-h31_to_-v45" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="170.33">
+    <personFlow id="pf_medium_-h31_to_-v45" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="340.67">
         <personTrip from="-h31" to="-v45"/>
     </personFlow>
-    <personFlow id="pf_medium_-h41_to_-v45" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="53.67">
+    <personFlow id="pf_medium_-h41_to_-v45" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="107.33">
         <personTrip from="-h41" to="-v45"/>
     </personFlow>
-    <personFlow id="pf_medium_h15_to_v11" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="53.67">
+    <personFlow id="pf_medium_h15_to_v11" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="107.33">
         <personTrip from="h15" to="v11"/>
     </personFlow>
-    <personFlow id="pf_medium_h25_to_v11" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="170.33">
+    <personFlow id="pf_medium_h25_to_v11" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="340.67">
         <personTrip from="h25" to="v11"/>
     </personFlow>
-    <personFlow id="pf_medium_h35_to_v41" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="170.33">
+    <personFlow id="pf_medium_h35_to_v41" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="340.67">
         <personTrip from="h35" to="v41"/>
     </personFlow>
-    <personFlow id="pf_medium_h45_to_v41" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="53.67">
+    <personFlow id="pf_medium_h45_to_v41" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="107.33">
         <personTrip from="h45" to="v41"/>
     </personFlow>
-    <personFlow id="pf_medium_-v11_to_-h15" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="53.67">
+    <personFlow id="pf_medium_-v11_to_-h15" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="107.33">
         <personTrip from="-v11" to="-h15"/>
     </personFlow>
-    <personFlow id="pf_medium_-v21_to_-h45" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="170.33">
+    <personFlow id="pf_medium_-v21_to_-h45" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="340.67">
         <personTrip from="-v21" to="-h45"/>
     </personFlow>
-    <personFlow id="pf_medium_-v31_to_-h15" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="170.33">
+    <personFlow id="pf_medium_-v31_to_-h15" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="340.67">
         <personTrip from="-v31" to="-h15"/>
     </personFlow>
-    <personFlow id="pf_medium_-v41_to_-h45" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="53.67">
+    <personFlow id="pf_medium_-v41_to_-h45" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="107.33">
         <personTrip from="-v41" to="-h45"/>
     </personFlow>
-    <personFlow id="pf_medium_v15_to_h11" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="53.67">
+    <personFlow id="pf_medium_v15_to_h11" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="107.33">
         <personTrip from="v15" to="h11"/>
     </personFlow>
-    <personFlow id="pf_medium_v25_to_h41" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="170.33">
+    <personFlow id="pf_medium_v25_to_h41" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="340.67">
         <personTrip from="v25" to="h41"/>
     </personFlow>
-    <personFlow id="pf_medium_v35_to_h11" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="170.33">
+    <personFlow id="pf_medium_v35_to_h11" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="340.67">
         <personTrip from="v35" to="h11"/>
     </personFlow>
-    <personFlow id="pf_medium_v45_to_h41" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="53.67">
+    <personFlow id="pf_medium_v45_to_h41" type="ped_wait_hazard" begin="900.00" end="1800.00" perHour="107.33">
         <personTrip from="v45" to="h41"/>
     </personFlow>
-    <!-- segment=high: begin=1800, end=2700, 6912 veh/h + 2304 ped/h -->
+    <!-- segment=high: begin=1800, end=2700, 6912 veh/h + 4608 ped/h -->
     <flow id="f_high_-h11_to_-h15" begin="1800.00" end="2700.00" perHour="207.00" from="-h11" to="-h15" departLane="best" departSpeed="max"/>
     <flow id="f_high_-h21_to_-h15" begin="1800.00" end="2700.00" perHour="657.00" from="-h21" to="-h15" departLane="best" departSpeed="max"/>
     <flow id="f_high_-h31_to_-h45" begin="1800.00" end="2700.00" perHour="657.00" from="-h31" to="-h45" departLane="best" departSpeed="max"/>
@@ -151,55 +151,55 @@
     <flow id="f_high_v25_to_v41" begin="1800.00" end="2700.00" perHour="657.00" from="v25" to="v41" departLane="best" departSpeed="max"/>
     <flow id="f_high_v35_to_v11" begin="1800.00" end="2700.00" perHour="657.00" from="v35" to="v11" departLane="best" departSpeed="max"/>
     <flow id="f_high_v45_to_v41" begin="1800.00" end="2700.00" perHour="207.00" from="v45" to="v41" departLane="best" departSpeed="max"/>
-    <personFlow id="pf_high_-h11_to_-v15" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="69.00">
+    <personFlow id="pf_high_-h11_to_-v15" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="138.00">
         <personTrip from="-h11" to="-v15"/>
     </personFlow>
-    <personFlow id="pf_high_-h21_to_-v15" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="219.00">
+    <personFlow id="pf_high_-h21_to_-v15" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="438.00">
         <personTrip from="-h21" to="-v15"/>
     </personFlow>
-    <personFlow id="pf_high_-h31_to_-v45" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="219.00">
+    <personFlow id="pf_high_-h31_to_-v45" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="438.00">
         <personTrip from="-h31" to="-v45"/>
     </personFlow>
-    <personFlow id="pf_high_-h41_to_-v45" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="69.00">
+    <personFlow id="pf_high_-h41_to_-v45" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="138.00">
         <personTrip from="-h41" to="-v45"/>
     </personFlow>
-    <personFlow id="pf_high_h15_to_v11" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="69.00">
+    <personFlow id="pf_high_h15_to_v11" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="138.00">
         <personTrip from="h15" to="v11"/>
     </personFlow>
-    <personFlow id="pf_high_h25_to_v11" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="219.00">
+    <personFlow id="pf_high_h25_to_v11" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="438.00">
         <personTrip from="h25" to="v11"/>
     </personFlow>
-    <personFlow id="pf_high_h35_to_v41" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="219.00">
+    <personFlow id="pf_high_h35_to_v41" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="438.00">
         <personTrip from="h35" to="v41"/>
     </personFlow>
-    <personFlow id="pf_high_h45_to_v41" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="69.00">
+    <personFlow id="pf_high_h45_to_v41" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="138.00">
         <personTrip from="h45" to="v41"/>
     </personFlow>
-    <personFlow id="pf_high_-v11_to_-h15" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="69.00">
+    <personFlow id="pf_high_-v11_to_-h15" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="138.00">
         <personTrip from="-v11" to="-h15"/>
     </personFlow>
-    <personFlow id="pf_high_-v21_to_-h45" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="219.00">
+    <personFlow id="pf_high_-v21_to_-h45" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="438.00">
         <personTrip from="-v21" to="-h45"/>
     </personFlow>
-    <personFlow id="pf_high_-v31_to_-h15" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="219.00">
+    <personFlow id="pf_high_-v31_to_-h15" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="438.00">
         <personTrip from="-v31" to="-h15"/>
     </personFlow>
-    <personFlow id="pf_high_-v41_to_-h45" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="69.00">
+    <personFlow id="pf_high_-v41_to_-h45" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="138.00">
         <personTrip from="-v41" to="-h45"/>
     </personFlow>
-    <personFlow id="pf_high_v15_to_h11" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="69.00">
+    <personFlow id="pf_high_v15_to_h11" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="138.00">
         <personTrip from="v15" to="h11"/>
     </personFlow>
-    <personFlow id="pf_high_v25_to_h41" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="219.00">
+    <personFlow id="pf_high_v25_to_h41" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="438.00">
         <personTrip from="v25" to="h41"/>
     </personFlow>
-    <personFlow id="pf_high_v35_to_h11" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="219.00">
+    <personFlow id="pf_high_v35_to_h11" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="438.00">
         <personTrip from="v35" to="h11"/>
     </personFlow>
-    <personFlow id="pf_high_v45_to_h41" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="69.00">
+    <personFlow id="pf_high_v45_to_h41" type="ped_wait_hazard" begin="1800.00" end="2700.00" perHour="138.00">
         <personTrip from="v45" to="h41"/>
     </personFlow>
-    <!-- segment=ultra_stress: begin=2700, end=3600, 8448 veh/h + 2816 ped/h -->
+    <!-- segment=ultra_stress: begin=2700, end=3600, 8448 veh/h + 5632 ped/h -->
     <flow id="f_ultra_stress_-h11_to_-h15" begin="2700.00" end="3600.00" perHour="253.00" from="-h11" to="-h15" departLane="best" departSpeed="max"/>
     <flow id="f_ultra_stress_-h21_to_-h15" begin="2700.00" end="3600.00" perHour="803.00" from="-h21" to="-h15" departLane="best" departSpeed="max"/>
     <flow id="f_ultra_stress_-h31_to_-h45" begin="2700.00" end="3600.00" perHour="803.00" from="-h31" to="-h45" departLane="best" departSpeed="max"/>
@@ -216,53 +216,53 @@
     <flow id="f_ultra_stress_v25_to_v41" begin="2700.00" end="3600.00" perHour="803.00" from="v25" to="v41" departLane="best" departSpeed="max"/>
     <flow id="f_ultra_stress_v35_to_v11" begin="2700.00" end="3600.00" perHour="803.00" from="v35" to="v11" departLane="best" departSpeed="max"/>
     <flow id="f_ultra_stress_v45_to_v41" begin="2700.00" end="3600.00" perHour="253.00" from="v45" to="v41" departLane="best" departSpeed="max"/>
-    <personFlow id="pf_ultra_stress_-h11_to_-v15" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="84.33">
+    <personFlow id="pf_ultra_stress_-h11_to_-v15" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="168.67">
         <personTrip from="-h11" to="-v15"/>
     </personFlow>
-    <personFlow id="pf_ultra_stress_-h21_to_-v15" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="267.67">
+    <personFlow id="pf_ultra_stress_-h21_to_-v15" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="535.33">
         <personTrip from="-h21" to="-v15"/>
     </personFlow>
-    <personFlow id="pf_ultra_stress_-h31_to_-v45" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="267.67">
+    <personFlow id="pf_ultra_stress_-h31_to_-v45" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="535.33">
         <personTrip from="-h31" to="-v45"/>
     </personFlow>
-    <personFlow id="pf_ultra_stress_-h41_to_-v45" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="84.33">
+    <personFlow id="pf_ultra_stress_-h41_to_-v45" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="168.67">
         <personTrip from="-h41" to="-v45"/>
     </personFlow>
-    <personFlow id="pf_ultra_stress_h15_to_v11" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="84.33">
+    <personFlow id="pf_ultra_stress_h15_to_v11" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="168.67">
         <personTrip from="h15" to="v11"/>
     </personFlow>
-    <personFlow id="pf_ultra_stress_h25_to_v11" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="267.67">
+    <personFlow id="pf_ultra_stress_h25_to_v11" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="535.33">
         <personTrip from="h25" to="v11"/>
     </personFlow>
-    <personFlow id="pf_ultra_stress_h35_to_v41" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="267.67">
+    <personFlow id="pf_ultra_stress_h35_to_v41" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="535.33">
         <personTrip from="h35" to="v41"/>
     </personFlow>
-    <personFlow id="pf_ultra_stress_h45_to_v41" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="84.33">
+    <personFlow id="pf_ultra_stress_h45_to_v41" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="168.67">
         <personTrip from="h45" to="v41"/>
     </personFlow>
-    <personFlow id="pf_ultra_stress_-v11_to_-h15" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="84.33">
+    <personFlow id="pf_ultra_stress_-v11_to_-h15" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="168.67">
         <personTrip from="-v11" to="-h15"/>
     </personFlow>
-    <personFlow id="pf_ultra_stress_-v21_to_-h45" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="267.67">
+    <personFlow id="pf_ultra_stress_-v21_to_-h45" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="535.33">
         <personTrip from="-v21" to="-h45"/>
     </personFlow>
-    <personFlow id="pf_ultra_stress_-v31_to_-h15" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="267.67">
+    <personFlow id="pf_ultra_stress_-v31_to_-h15" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="535.33">
         <personTrip from="-v31" to="-h15"/>
     </personFlow>
-    <personFlow id="pf_ultra_stress_-v41_to_-h45" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="84.33">
+    <personFlow id="pf_ultra_stress_-v41_to_-h45" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="168.67">
         <personTrip from="-v41" to="-h45"/>
     </personFlow>
-    <personFlow id="pf_ultra_stress_v15_to_h11" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="84.33">
+    <personFlow id="pf_ultra_stress_v15_to_h11" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="168.67">
         <personTrip from="v15" to="h11"/>
     </personFlow>
-    <personFlow id="pf_ultra_stress_v25_to_h41" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="267.67">
+    <personFlow id="pf_ultra_stress_v25_to_h41" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="535.33">
         <personTrip from="v25" to="h41"/>
     </personFlow>
-    <personFlow id="pf_ultra_stress_v35_to_h11" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="267.67">
+    <personFlow id="pf_ultra_stress_v35_to_h11" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="535.33">
         <personTrip from="v35" to="h11"/>
     </personFlow>
-    <personFlow id="pf_ultra_stress_v45_to_h41" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="84.33">
+    <personFlow id="pf_ultra_stress_v45_to_h41" type="ped_wait_hazard" begin="2700.00" end="3600.00" perHour="168.67">
         <personTrip from="v45" to="h41"/>
     </personFlow>
-    <!-- expected total over 3600s: 6144 vehicles + 2048 pedestrians -->
+    <!-- expected total over 3600s: 6144 vehicles + 4096 pedestrians -->
 </routes>
