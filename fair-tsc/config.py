@@ -77,7 +77,7 @@ CKPT_DIR = os.path.join(BASE_DIR, "checkpoints", RUN_NAME)
 
 # SUMO simulation
 NUM_SECONDS = int(os.environ.get("FAIR_TSC_NUM_SECONDS", "3600"))
-DELTA_TIME = int(os.environ.get("FAIR_TSC_DELTA_TIME", "5"))
+DELTA_TIME = int(os.environ.get("FAIR_TSC_DELTA_TIME", "10"))
 MIN_GREEN = int(os.environ.get("FAIR_TSC_MIN_GREEN", "5"))
 TIME_TO_TELEPORT = int(os.environ.get("FAIR_TSC_TIME_TO_TELEPORT", "600"))
 USE_GUI = False

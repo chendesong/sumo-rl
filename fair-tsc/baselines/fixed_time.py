@@ -31,7 +31,7 @@ from evaluate import (
 
 
 # Fixed cycle: spend FIXED_PHASE_DURATION simulated seconds in each green
-# phase before advancing.  At Δt=5s decision rate, this is
+# phase before advancing.  At the configured decision rate, this is
 # FIXED_PHASE_DURATION // Δt decision steps per phase.
 FIXED_PHASE_DURATION = 30   # seconds per green phase per intersection
 
