@@ -1,4 +1,9 @@
-"""SSAM-style vehicle conflict screening from SUMO FCD trajectories.
+"""DO NOT USE in the current Cox-merged Fair-TSC workflow.
+
+This SSAM/FCD proxy is parked for now.  The active safety/risk path is the
+Cox training-time SUMO intervention in `train_fair_tsc_cox_merged.py`.
+
+SSAM-style vehicle conflict screening from SUMO FCD trajectories.
 
 This is a lightweight post-process for large SUMO FCD files when the FHWA
 SSAM desktop application is not available on the server. It is intentionally

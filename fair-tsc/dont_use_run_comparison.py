@@ -1,4 +1,8 @@
-"""One-shot algorithm-comparison driver for the Fair-TSC preliminary plot.
+"""DO NOT USE in the current Cox-merged Fair-TSC workflow.
+
+This is an old one-shot algorithm-comparison driver for preliminary plots.
+It is kept only for reference; current work should use direct training/eval
+scripts instead of this combined slow comparison runner.
 
 Runs all baselines through the SAME `evaluate.evaluate_run` entry point
 and produces `comparison_preliminary.csv` with columns:
