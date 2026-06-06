@@ -126,6 +126,8 @@ PID_KD = float(os.environ.get("FAIR_TSC_PID_KD", "0.10"))
 PID_LAMBDA_MAX = float(os.environ.get("FAIR_TSC_PID_LAMBDA_MAX", "5.0"))
 PID_INTEGRAL_MAX = float(os.environ.get("FAIR_TSC_PID_INTEGRAL_MAX", "20.0"))
 PID_EMA_BETA = float(os.environ.get("FAIR_TSC_PID_EMA_BETA", "0.9"))
+_fixed_lambda_env = os.environ.get("FAIR_TSC_FIXED_LAMBDA", "").strip()
+FIXED_LAMBDA = None if _fixed_lambda_env == "" else float(_fixed_lambda_env)
 
 # If a phase is activated fewer than twice in one episode, treat its
 # service interval as the full episode horizon.

@@ -245,6 +245,18 @@ def disabled_pid_stats(c_fair: float) -> Dict[str, float]:
     }
 
 
+def fixed_lambda_stats(c_fair: float, lambda_value: float) -> Dict[str, float]:
+    return {
+        "C_fair_raw": float(c_fair),
+        "C_fair_ema": float(c_fair),
+        "fair_target": float(C.FAIR_C_TARGET),
+        "pid_error": 0.0,
+        "pid_integral": 0.0,
+        "pid_derivative": 0.0,
+        "lambda_fair": float(lambda_value),
+    }
+
+
 def select_fair_credit(fair: Dict, agent_ids) -> Dict[str, float]:
     """Return the advantage-level fairness credit for the selected ablation."""
     if C.FAIR_CREDIT_MODE == "per_agent":
@@ -491,6 +503,7 @@ def main():
     print(f"mode = {'Fair-TSC PID' if C.FAIRNESS_ENABLED else 'vanilla MAPPO calibration'}")
     print(f"T_INTER_0={C.T_INTER_0:.6f}  T_INTRA_0={C.T_INTRA_0:.6f}")
     print(f"fair_credit_mode={C.FAIR_CREDIT_MODE}")
+    print(f"fixed_lambda={C.FIXED_LAMBDA if C.FIXED_LAMBDA is not None else 'adaptive_pid'}")
     print(
         f"reward_norm={int(C.REWARD_NORMALIZE)} center={int(C.REWARD_NORM_CENTER)} "
         f"clip={C.REWARD_NORM_CLIP:g}"
@@ -754,9 +767,14 @@ def main():
         fair = compute_dual_level_fairness(env, buffer, deltas)
 
         if C.FAIRNESS_ENABLED:
-            pid_stats = pid.update(fair["C_fair"])
+            if C.FIXED_LAMBDA is None:
+                pid_stats = pid.update(fair["C_fair"])
+                lambda_for_credit = pid.lambda_value
+            else:
+                pid_stats = fixed_lambda_stats(fair["C_fair"], C.FIXED_LAMBDA)
+                lambda_for_credit = C.FIXED_LAMBDA
             fair_credit = select_fair_credit(fair, env.agent_ids)
-            apply_fair_advantage(buffer, fair_credit, agent_idx_to_id, pid.lambda_value)
+            apply_fair_advantage(buffer, fair_credit, agent_idx_to_id, lambda_for_credit)
         else:
             pid_stats = disabled_pid_stats(fair["C_fair"])
             fair_credit = select_fair_credit(fair, env.agent_ids)
@@ -873,6 +891,7 @@ def main():
                     "T_INTRA_0": C.T_INTRA_0,
                     "FAIR_ALPHA": C.FAIR_ALPHA,
                     "FAIR_CREDIT_MODE": C.FAIR_CREDIT_MODE,
+                    "FIXED_LAMBDA": C.FIXED_LAMBDA,
                     "INIT_MARL_FROM_UE_CKPT": C.INIT_MARL_FROM_UE_CKPT,
                     "REWARD_NORMALIZE": C.REWARD_NORMALIZE,
                     "REWARD_NORM_CENTER": C.REWARD_NORM_CENTER,
@@ -899,6 +918,7 @@ def main():
             "T_INTRA_0": C.T_INTRA_0,
             "FAIR_ALPHA": C.FAIR_ALPHA,
             "FAIR_CREDIT_MODE": C.FAIR_CREDIT_MODE,
+            "FIXED_LAMBDA": C.FIXED_LAMBDA,
             "INIT_MARL_FROM_UE_CKPT": C.INIT_MARL_FROM_UE_CKPT,
             "REWARD_NORMALIZE": C.REWARD_NORMALIZE,
             "REWARD_NORM_CENTER": C.REWARD_NORM_CENTER,
