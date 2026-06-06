@@ -293,11 +293,101 @@ RISK_EVENT_FIELDS = [
 ]
 
 
+GREEN_SPLIT_FIELDS = [
+    "stage",
+    "episode",
+    "scope",
+    "agent_id",
+    "phase",
+    "phase_label",
+    "green_seconds",
+    "green_split",
+]
+
+GREEN_SPLIT_PHASE_LABELS = {
+    0: "NS vehicle",
+    1: "EW vehicle",
+    2: "pedestrian",
+}
+
+
 def write_risk_events(writer, stage: int, episode: int, events: List[Dict]) -> None:
     for event in events:
         row = {field: event.get(field, "") for field in RISK_EVENT_FIELDS}
         row["stage"] = int(stage)
         row["episode"] = int(episode)
+        writer.writerow(row)
+
+
+def green_split_rows_from_phase_log(
+    phase_start_log: Dict[str, Dict[int, List[float]]],
+    horizon_s: float,
+    stage: int,
+    episode: int,
+) -> List[Dict]:
+    """Convert each episode's phase starts into per-agent and network splits."""
+    rows: List[Dict] = []
+    network_seconds: Dict[int, float] = {}
+
+    for agent_id, phase_map in sorted(phase_start_log.items()):
+        events = []
+        for phase, starts in phase_map.items():
+            for start in starts:
+                start_f = float(start)
+                if 0.0 <= start_f <= float(horizon_s):
+                    events.append((start_f, int(phase)))
+        events.sort(key=lambda x: (x[0], x[1]))
+
+        phase_seconds = {int(phase): 0.0 for phase in phase_map.keys()}
+        for idx, (start, phase) in enumerate(events):
+            end = events[idx + 1][0] if idx + 1 < len(events) else float(horizon_s)
+            seconds = max(0.0, end - start)
+            phase_seconds[phase] = phase_seconds.get(phase, 0.0) + seconds
+
+        total = sum(phase_seconds.values())
+        denom = max(total, 1e-9)
+        for phase in sorted(phase_seconds):
+            seconds = float(phase_seconds[phase])
+            network_seconds[phase] = network_seconds.get(phase, 0.0) + seconds
+            rows.append(
+                {
+                    "stage": int(stage),
+                    "episode": int(episode),
+                    "scope": "agent",
+                    "agent_id": agent_id,
+                    "phase": int(phase),
+                    "phase_label": GREEN_SPLIT_PHASE_LABELS.get(int(phase), f"phase {phase}"),
+                    "green_seconds": seconds,
+                    "green_split": seconds / denom,
+                }
+            )
+
+    network_total = sum(network_seconds.values())
+    denom = max(network_total, 1e-9)
+    for phase in sorted(network_seconds):
+        seconds = float(network_seconds[phase])
+        rows.append(
+            {
+                "stage": int(stage),
+                "episode": int(episode),
+                "scope": "network",
+                "agent_id": "network",
+                "phase": int(phase),
+                "phase_label": GREEN_SPLIT_PHASE_LABELS.get(int(phase), f"phase {phase}"),
+                "green_seconds": seconds,
+                "green_split": seconds / denom,
+            }
+        )
+    return rows
+
+
+def write_green_split_episode(writer, env, stage: int, episode: int) -> None:
+    for row in green_split_rows_from_phase_log(
+        env.get_phase_start_log(),
+        horizon_s=float(C.NUM_SECONDS),
+        stage=stage,
+        episode=episode,
+    ):
         writer.writerow(row)
 
 
@@ -429,10 +519,12 @@ def main():
     log_path = os.path.join(C.OUTPUT_DIR, "train_log.csv")
     per_agent_path = os.path.join(C.OUTPUT_DIR, "per_agent_log.csv")
     risk_events_path = os.path.join(C.OUTPUT_DIR, "risk_events_train.csv")
+    green_split_path = os.path.join(C.OUTPUT_DIR, "green_split_episode.csv")
     print(f"output dir : {C.OUTPUT_DIR}")
     print(f"ckpt dir   : {C.CKPT_DIR}")
     print(f"log file   : {log_path}")
     print(f"risk events: {risk_events_path}")
+    print(f"green split: {green_split_path}")
 
     env = FairTSCEnv(
         net_file=C.NET_FILE,
@@ -550,6 +642,10 @@ def main():
     risk_events_writer = csv.DictWriter(risk_events_file, fieldnames=RISK_EVENT_FIELDS)
     risk_events_writer.writeheader()
 
+    green_split_file = open(green_split_path, "w", newline="", encoding="utf-8")
+    green_split_writer = csv.DictWriter(green_split_file, fieldnames=GREEN_SPLIT_FIELDS)
+    green_split_writer.writeheader()
+
     t0 = time.time()
     global_step = 0
     episode = 0
@@ -592,6 +688,8 @@ def main():
         )
         write_risk_events(risk_events_writer, 1, episode, risk_events)
         risk_events_file.flush()
+        write_green_split_episode(green_split_writer, env, 1, episode)
+        green_split_file.flush()
 
         write_row(
             log_writer,
@@ -714,6 +812,8 @@ def main():
         per_agent_file.flush()
         write_risk_events(risk_events_writer, 2, episode, risk_events)
         risk_events_file.flush()
+        write_green_split_episode(green_split_writer, env, 2, episode)
+        green_split_file.flush()
 
         write_row(
             log_writer,
@@ -811,10 +911,12 @@ def main():
     print(f"\n[done] {episode} episodes, {global_step} steps, {(time.time() - t0) / 60:.1f} min.")
     print(f"Final ckpt: {final_path}")
     print(f"Risk events: {risk_events_path}")
+    print(f"Green split: {green_split_path}")
 
     log_file.close()
     per_agent_file.close()
     risk_events_file.close()
+    green_split_file.close()
     env.close()
 
 
