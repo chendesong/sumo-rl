@@ -550,11 +550,17 @@ def load_shared_ue_critic(
             f"Ckpt at {ckpt_path} is not a dict (got {type(ckpt).__name__}); "
             "expected a Fair-TSC training save dict containing `critic_ue`."
         )
-    if "critic_ue" not in ckpt:
+    critic_key = None
+    for candidate in ("critic_ue", "critic_ippo", "critic_marl"):
+        if candidate in ckpt:
+            critic_key = candidate
+            break
+    if critic_key is None:
         raise KeyError(
-            f"Ckpt at {ckpt_path} is missing the `critic_ue` state_dict key. "
+            f"Ckpt at {ckpt_path} is missing a UE-compatible critic state_dict key "
+            "(`critic_ue`, `critic_ippo`, or `critic_marl`). "
             f"Keys present: {sorted(ckpt.keys())}. "
-            "Re-train Fair-TSC or point FAIR_TSC_CKPT at a ckpt that has it."
+            "Re-train the IPPO/UE reference or point FAIR_TSC_UE_CKPT at a ckpt that has it."
         )
 
     critic_ue = SharedCritic(
@@ -563,17 +569,17 @@ def load_shared_ue_critic(
         hidden=C.CRITIC_HIDDEN,
     ).to(device)
     try:
-        critic_ue.load_state_dict(ckpt["critic_ue"], strict=True)
+        critic_ue.load_state_dict(ckpt[critic_key], strict=True)
     except RuntimeError as e:
         # Decorate the error with both the expected (model) and provided
         # (ckpt) shapes so the user can diagnose a wrong-shape ckpt fast.
         model_shapes = {k: tuple(v.shape) for k, v in critic_ue.state_dict().items()}
         ckpt_shapes  = {k: tuple(v.shape) if hasattr(v, "shape") else type(v).__name__
-                        for k, v in ckpt["critic_ue"].items()}
+                        for k, v in ckpt[critic_key].items()}
         raise RuntimeError(
-            f"Shape mismatch loading critic_ue from {ckpt_path}.\n"
+            f"Shape mismatch loading {critic_key} from {ckpt_path}.\n"
             f"Model SharedCritic state_dict shapes: {model_shapes}\n"
-            f"Ckpt   critic_ue   state_dict shapes: {ckpt_shapes}\n"
+            f"Ckpt   {critic_key}   state_dict shapes: {ckpt_shapes}\n"
             f"Original error: {e}"
         ) from e
 
@@ -581,7 +587,7 @@ def load_shared_ue_critic(
     for p in critic_ue.parameters():
         p.requires_grad_(False)
 
-    print(f"[evaluate.load_shared_ue_critic] loaded V^UE from {ckpt_path}  "
+    print(f"[evaluate.load_shared_ue_critic] loaded V^UE from {ckpt_path} key={critic_key}  "
           f"(global_obs_dim={env.global_obs_dim}, num_agents={env.num_agents})")
     return critic_ue
 
