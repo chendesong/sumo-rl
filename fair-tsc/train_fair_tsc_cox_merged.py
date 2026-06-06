@@ -361,6 +361,38 @@ def load_ue_reference_if_requested(actor_ue, critic_ue, env, device) -> bool:
     return True
 
 
+def init_marl_from_ue_ckpt_if_requested(actor_marl, critic_marl, env, device) -> bool:
+    """Optionally warm-start the trainable MARL policy from the UE/IPPO checkpoint."""
+    if not C.INIT_MARL_FROM_UE_CKPT:
+        return False
+    if not C.UE_CKPT:
+        raise ValueError("FAIR_TSC_INIT_MARL_FROM_UE_CKPT=1 requires FAIR_TSC_UE_CKPT.")
+
+    path = os.path.expanduser(C.UE_CKPT)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"FAIR_TSC_UE_CKPT not found: {path}")
+    ckpt = _load_torch_ckpt(path, device)
+    if not isinstance(ckpt, dict):
+        raise TypeError(f"FAIR_TSC_UE_CKPT must be a torch checkpoint dict: {path}")
+
+    for meta_key, current in [
+        ("global_obs_dim", env.global_obs_dim),
+        ("local_obs_dim", env.local_obs_dim),
+        ("num_agents", env.num_agents),
+        ("action_dim", env.action_dim),
+    ]:
+        saved = ckpt.get(meta_key)
+        if saved is not None and int(saved) != int(current):
+            raise ValueError(
+                f"FAIR_TSC_UE_CKPT {meta_key} mismatch: checkpoint={saved}, current={current}"
+            )
+
+    critic_key = _load_first_state(critic_marl, ckpt, ("critic_marl", "critic_ippo", "critic_ue"), "critic")
+    actor_key = _load_first_state(actor_marl, ckpt, ("actor_marl", "actor_ippo", "actor_ue"), "actor")
+    print(f"[MARL init] loaded {path}  critic_key={critic_key} actor_key={actor_key}")
+    return True
+
+
 def main():
     torch.manual_seed(C.SEED)
     np.random.seed(C.SEED)
@@ -382,6 +414,7 @@ def main():
         f"critic_lr={C.CRITIC_LR:g} minibatch={C.MINIBATCH_SIZE}"
     )
     print(f"UE reference ckpt = {C.UE_CKPT or '<stage-1 warmup>'}")
+    print(f"init_marl_from_ue_ckpt={int(C.INIT_MARL_FROM_UE_CKPT)}")
     print(f"route file = {C.ROUTE_FILE}")
     risk_cfg = build_training_risk_config()
     print("[Cox merged training] enabled=1")
@@ -425,6 +458,7 @@ def main():
     opt_actor_ue = torch.optim.Adam(actor_ue.parameters(), lr=C.ACTOR_LR)
     opt_critic_ue = torch.optim.Adam(critic_ue.parameters(), lr=C.CRITIC_LR)
     external_ue_loaded = load_ue_reference_if_requested(actor_ue, critic_ue, env, device)
+    init_marl_from_ue_ckpt_if_requested(actor_marl, critic_marl, env, device)
 
     pid = PIDFairnessController(
         target=C.FAIR_C_TARGET,
@@ -739,6 +773,7 @@ def main():
                     "T_INTRA_0": C.T_INTRA_0,
                     "FAIR_ALPHA": C.FAIR_ALPHA,
                     "FAIR_CREDIT_MODE": C.FAIR_CREDIT_MODE,
+                    "INIT_MARL_FROM_UE_CKPT": C.INIT_MARL_FROM_UE_CKPT,
                     "REWARD_NORMALIZE": C.REWARD_NORMALIZE,
                     "REWARD_NORM_CENTER": C.REWARD_NORM_CENTER,
                     "REWARD_NORM_CLIP": C.REWARD_NORM_CLIP,
@@ -764,6 +799,7 @@ def main():
             "T_INTRA_0": C.T_INTRA_0,
             "FAIR_ALPHA": C.FAIR_ALPHA,
             "FAIR_CREDIT_MODE": C.FAIR_CREDIT_MODE,
+            "INIT_MARL_FROM_UE_CKPT": C.INIT_MARL_FROM_UE_CKPT,
             "REWARD_NORMALIZE": C.REWARD_NORMALIZE,
             "REWARD_NORM_CENTER": C.REWARD_NORM_CENTER,
             "REWARD_NORM_CLIP": C.REWARD_NORM_CLIP,

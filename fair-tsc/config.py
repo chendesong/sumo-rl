@@ -115,6 +115,7 @@ _DEFAULT_T_INTRA_0 = {
 T_INTER_0 = float(os.environ.get("FAIR_TSC_T_INTER_0", _DEFAULT_T_INTER_0.get(DEMAND_LEVEL, "1.0")))
 T_INTRA_0 = float(os.environ.get("FAIR_TSC_T_INTRA_0", _DEFAULT_T_INTRA_0.get(DEMAND_LEVEL, "1.0")))
 UE_CKPT = os.environ.get("FAIR_TSC_UE_CKPT", "").strip()
+INIT_MARL_FROM_UE_CKPT = _env_bool("FAIR_TSC_INIT_MARL_FROM_UE_CKPT", "0")
 
 FAIR_C_TARGET = float(os.environ.get("FAIR_TSC_C_TARGET", "1.0"))
 FAIR_EPS = 1e-6
