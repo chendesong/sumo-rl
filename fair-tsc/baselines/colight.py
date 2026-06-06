@@ -20,6 +20,7 @@ from torch.distributions import Categorical
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config as C
+from comparison_artifacts import write_green_split_episode, write_train_episode
 from evaluate import MetricsCollector, compute_deltas_from_rollout, evaluate_run, load_shared_ue_critic
 from networks import SharedCritic
 from ppo_core import bootstrap_last_values, ppo_update
@@ -185,6 +186,7 @@ def train_colight(
     v_ue=None,
     save_actor: bool = True,
     additional_sumo_cmd: Optional[str] = None,
+    artifact_dir: Optional[str] = None,
 ) -> Dict:
     if seed is None:
         seed = C.SEED
@@ -218,6 +220,10 @@ def train_colight(
             buf = RolloutBuffer(env.agent_ids, env.num_agents)
             ep_R = collect_episode_colight(
                 env, actor, critic, buf, device, seed=seed + ep, neighbor_map=neighbor_map
+            )
+            write_train_episode(artifact_dir, "colight", env, ep + 1, ep_R, seed=seed)
+            write_green_split_episode(
+                artifact_dir, "colight", env, ep + 1, stage="train", seed=seed
             )
             if v_ue is None and ep == 0:
                 v_ue = load_shared_ue_critic(env=env, device=device)
@@ -256,6 +262,9 @@ def train_colight(
             env, actor, critic, buf, device,
             seed=seed + num_episodes, coll=coll, rollout=rollout, neighbor_map=neighbor_map,
         )
+        write_green_split_episode(
+            artifact_dir, "colight", env, num_episodes + 1, stage="eval", seed=seed
+        )
         env_metrics = coll.finalize(env)
         if v_ue is None:
             v_ue = load_shared_ue_critic(env=env, device=device)
@@ -267,8 +276,15 @@ def train_colight(
         env.close()
 
 
-def main(v_ue=None, additional_sumo_cmd: Optional[str] = None, **_unused):
-    return train_colight(num_episodes=50, v_ue=v_ue, additional_sumo_cmd=additional_sumo_cmd)
+def main(v_ue=None, additional_sumo_cmd: Optional[str] = None, artifact_dir: Optional[str] = None,
+         num_episodes: Optional[int] = None, seed: Optional[int] = None, **_unused):
+    return train_colight(
+        num_episodes=50 if num_episodes is None else int(num_episodes),
+        seed=seed,
+        v_ue=v_ue,
+        additional_sumo_cmd=additional_sumo_cmd,
+        artifact_dir=artifact_dir,
+    )
 
 
 if __name__ == "__main__":

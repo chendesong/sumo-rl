@@ -30,6 +30,7 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config as C
+from comparison_artifacts import write_green_split_episode, write_train_episode
 from sumo_env import FairTSCEnv
 from networks import SharedActor, SharedCritic
 from rollout_buffer import RolloutBuffer
@@ -88,6 +89,22 @@ def _intersection_queue(sumo_inner, agent_id: str) -> float:
     return float(sum(_lane_halting_count(lane_id) for lane_id in lanes))
 
 
+def _intersection_ped_queue(sumo_inner, agent_id: str) -> float:
+    """Pedestrian queue at an intersection, using the same SUMO signal API."""
+    ts = sumo_inner.traffic_signals.get(agent_id) if hasattr(sumo_inner, "traffic_signals") else None
+    if ts is None:
+        return 0.0
+    try:
+        return float(ts.get_total_pedestrian_queued())
+    except Exception:
+        return 0.0
+
+
+def _intersection_total_queue(sumo_inner, agent_id: str) -> float:
+    """Vehicle + pedestrian queue with the same pedestrian weight as env reward."""
+    return _intersection_queue(sumo_inner, agent_id) + float(C.OMEGA_P) * _intersection_ped_queue(sumo_inner, agent_id)
+
+
 def compute_fairsignal_rewards(sumo_inner, agent_ids: List[str],
                                 alpha: float = FAIRSIGNAL_ALPHA) -> Dict[str, float]:
     """FairSignal global reward broadcast to all intersections.
@@ -98,7 +115,7 @@ def compute_fairsignal_rewards(sumo_inner, agent_ids: List[str],
 
     Scaled by C.REWARD_SCALE for parity with the env rewards.
     """
-    queues = np.asarray([_intersection_queue(sumo_inner, a) for a in agent_ids], dtype=np.float32)
+    queues = np.asarray([_intersection_total_queue(sumo_inner, a) for a in agent_ids], dtype=np.float32)
     reward = -(float(queues.sum()) + float(alpha) * float(np.square(queues).sum()))
     shaped = reward / C.REWARD_SCALE
     return {a: shaped for a in agent_ids}
@@ -107,7 +124,7 @@ def compute_fairsignal_rewards(sumo_inner, agent_ids: List[str],
 def compute_fairsignal_components(sumo_inner, agent_ids: List[str],
                                   alpha: float = FAIRSIGNAL_ALPHA) -> Tuple[float, float, float]:
     """Return (efficiency term, fairness term, total), already scaled."""
-    queues = np.asarray([_intersection_queue(sumo_inner, a) for a in agent_ids], dtype=np.float32)
+    queues = np.asarray([_intersection_total_queue(sumo_inner, a) for a in agent_ids], dtype=np.float32)
     r_eff = -float(queues.sum()) / C.REWARD_SCALE
     r_fair = -float(alpha) * float(np.square(queues).sum()) / C.REWARD_SCALE
     return r_eff, r_fair, r_eff + r_fair
@@ -176,7 +193,8 @@ def train_fairsignal(num_episodes: int = 50, seed: Optional[int] = None,
                      v_ue=None,
                      alpha: float = FAIRSIGNAL_ALPHA,
                      save_critic: bool = True,
-                     additional_sumo_cmd: Optional[str] = None) -> Dict:
+                     additional_sumo_cmd: Optional[str] = None,
+                     artifact_dir: Optional[str] = None) -> Dict:
     """Train FairSignal for `num_episodes`, then run one eval.
 
     Args:
@@ -212,6 +230,10 @@ def train_fairsignal(num_episodes: int = 50, seed: Optional[int] = None,
             ep_R, n = collect_episode_fairsignal(
                 env, actor, critic, buf, device, seed=seed + ep, coll=None,
                 alpha=alpha,
+            )
+            write_train_episode(artifact_dir, "fairsignal", env, ep + 1, ep_R, seed=seed)
+            write_green_split_episode(
+                artifact_dir, "fairsignal", env, ep + 1, stage="train", seed=seed
             )
             if v_ue is None and ep == 0:
                 v_ue = load_shared_ue_critic(env=env, device=device)
@@ -258,6 +280,9 @@ def train_fairsignal(num_episodes: int = 50, seed: Optional[int] = None,
             seed=seed + num_episodes, coll=coll, rollout=rollout,
             alpha=alpha,
         )
+        write_green_split_episode(
+            artifact_dir, "fairsignal", env, num_episodes + 1, stage="eval", seed=seed
+        )
         env_metrics = coll.finalize(env)
 
         if v_ue is None:
@@ -279,8 +304,15 @@ def train_fairsignal(num_episodes: int = 50, seed: Optional[int] = None,
         env.close()
 
 
-def main(v_ue=None, additional_sumo_cmd: Optional[str] = None, **_unused):
-    return train_fairsignal(num_episodes=50, v_ue=v_ue, additional_sumo_cmd=additional_sumo_cmd)
+def main(v_ue=None, additional_sumo_cmd: Optional[str] = None, artifact_dir: Optional[str] = None,
+         num_episodes: Optional[int] = None, seed: Optional[int] = None, **_unused):
+    return train_fairsignal(
+        num_episodes=50 if num_episodes is None else int(num_episodes),
+        seed=seed,
+        v_ue=v_ue,
+        additional_sumo_cmd=additional_sumo_cmd,
+        artifact_dir=artifact_dir,
+    )
 
 
 if __name__ == "__main__":

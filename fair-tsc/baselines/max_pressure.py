@@ -28,6 +28,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config as C
+from comparison_artifacts import write_green_split_episode
 from sumo_env import FairTSCEnv
 from evaluate import (
     MetricsCollector,
@@ -103,7 +104,15 @@ def _mp_actions_for_all(env: FairTSCEnv) -> Dict[str, int]:
     return actions
 
 
-def run_max_pressure_episode(env: FairTSCEnv, seed: int = 0, v_ue=None) -> Dict:
+def run_max_pressure_episode(
+    env: FairTSCEnv,
+    seed: int = 0,
+    v_ue=None,
+    artifact_dir: Optional[str] = None,
+    episode: int = 1,
+    stage: str = "eval",
+    method_name: str = "max_pressure",
+) -> Dict:
     obs = env.reset(seed=seed)
     if v_ue is None:
         v_ue = load_shared_ue_critic(env=env)
@@ -124,6 +133,9 @@ def run_max_pressure_episode(env: FairTSCEnv, seed: int = 0, v_ue=None) -> Dict:
         coll.add(info, mean_reward=mean_r)
         obs = next_obs
 
+    write_green_split_episode(
+        artifact_dir, method=method_name, env=env, episode=episode, stage=stage, seed=seed
+    )
     env_metrics = coll.finalize(env)
 
     if len(rollout) == 0:
@@ -135,7 +147,15 @@ def run_max_pressure_episode(env: FairTSCEnv, seed: int = 0, v_ue=None) -> Dict:
     return evaluate_run(deltas_TN, env_metrics, delta_valid=True)
 
 
-def main(v_ue=None, additional_sumo_cmd: Optional[str] = None, **_unused):
+def main(
+    v_ue=None,
+    additional_sumo_cmd: Optional[str] = None,
+    artifact_dir: Optional[str] = None,
+    episode: int = 1,
+    stage: str = "eval",
+    seed: Optional[int] = None,
+    **_unused,
+):
     """Entry point. `v_ue` may be a pre-loaded shared SharedCritic.
     Ignores legacy kwargs (e.g. v_ue_fn=)."""
     env = FairTSCEnv(
@@ -145,7 +165,15 @@ def main(v_ue=None, additional_sumo_cmd: Optional[str] = None, **_unused):
         additional_sumo_cmd=additional_sumo_cmd,
     )
     try:
-        result = run_max_pressure_episode(env, seed=C.SEED, v_ue=v_ue)
+        result = run_max_pressure_episode(
+            env,
+            seed=C.SEED if seed is None else int(seed),
+            v_ue=v_ue,
+            artifact_dir=artifact_dir,
+            episode=episode,
+            stage=stage,
+            method_name="max_pressure",
+        )
         print(f"[max_pressure] {result}")
         return result
     finally:

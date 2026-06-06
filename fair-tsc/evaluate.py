@@ -255,6 +255,8 @@ def evaluate_run(deltas_TN: np.ndarray,
         efficiency_metric = "none"
 
     ped_wait = _safe_mean(env_metrics.get("agents_total_ped_waiting_time_series"))
+    vehicle_queue_mean = _safe_mean(env_metrics.get("agents_total_stopped_series"))
+    ped_queue_mean = _safe_mean(env_metrics.get("agents_total_ped_queued_series"))
     ped_expected = _safe_mean(env_metrics.get("agents_total_expected_violations_series"))
     num_agents = int(env_metrics.get("num_agents") or deltas_TN.shape[1] or getattr(C, "NUM_AGENTS", 0) or 0)
     ped_risk = env_metrics.get("ped_risk")
@@ -283,6 +285,8 @@ def evaluate_run(deltas_TN: np.ndarray,
         "efficiency_metric": efficiency_metric,
         "queue_efficiency": float(queue_efficiency),
         "reward_efficiency": float(reward_efficiency),
+        "vehicle_queue_mean": float(vehicle_queue_mean),
+        "ped_queue_mean": float(ped_queue_mean),
         "ped_wait":    float(ped_wait),
         "ped_risk":    float(ped_risk),
         "ped_expected_violations": float(ped_expected),

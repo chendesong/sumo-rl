@@ -21,6 +21,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config as C
+from comparison_artifacts import write_green_split_episode
 from sumo_env import FairTSCEnv
 from evaluate import (
     MetricsCollector,
@@ -36,7 +37,15 @@ from evaluate import (
 FIXED_PHASE_DURATION = 30   # seconds per green phase per intersection
 
 
-def run_fixed_time_episode(env: FairTSCEnv, seed: int = 0, v_ue=None) -> Dict:
+def run_fixed_time_episode(
+    env: FairTSCEnv,
+    seed: int = 0,
+    v_ue=None,
+    artifact_dir: Optional[str] = None,
+    episode: int = 1,
+    stage: str = "eval",
+    method_name: str = "fixed_time",
+) -> Dict:
     """Roll out one episode with fixed-time control on every intersection.
 
     Args:
@@ -82,6 +91,9 @@ def run_fixed_time_episode(env: FairTSCEnv, seed: int = 0, v_ue=None) -> Dict:
         obs = next_obs
         step_counter += 1
 
+    write_green_split_episode(
+        artifact_dir, method=method_name, env=env, episode=episode, stage=stage, seed=seed
+    )
     env_metrics = coll.finalize(env)
 
     if len(rollout) == 0:
@@ -93,7 +105,15 @@ def run_fixed_time_episode(env: FairTSCEnv, seed: int = 0, v_ue=None) -> Dict:
     return evaluate_run(deltas_TN, env_metrics, delta_valid=True)
 
 
-def main(v_ue=None, additional_sumo_cmd: Optional[str] = None, **_unused):
+def main(
+    v_ue=None,
+    additional_sumo_cmd: Optional[str] = None,
+    artifact_dir: Optional[str] = None,
+    episode: int = 1,
+    stage: str = "eval",
+    seed: Optional[int] = None,
+    **_unused,
+):
     """Entry point. `v_ue` may be a pre-loaded shared SharedCritic.
     Accepts and ignores legacy kwargs (e.g. v_ue_fn=) so the caller in
     run_comparison can hand the same kwargs to every baseline without
@@ -106,7 +126,15 @@ def main(v_ue=None, additional_sumo_cmd: Optional[str] = None, **_unused):
         additional_sumo_cmd=additional_sumo_cmd,
     )
     try:
-        result = run_fixed_time_episode(env, seed=C.SEED, v_ue=v_ue)
+        result = run_fixed_time_episode(
+            env,
+            seed=C.SEED if seed is None else int(seed),
+            v_ue=v_ue,
+            artifact_dir=artifact_dir,
+            episode=episode,
+            stage=stage,
+            method_name="fixed_time",
+        )
         print(f"[fixed_time] {result}")
         return result
     finally:

@@ -25,6 +25,7 @@ import torch.nn.functional as F
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config as C
+from comparison_artifacts import write_green_split_episode, write_train_episode
 from evaluate import MetricsCollector, compute_deltas_from_rollout, evaluate_run, load_shared_ue_critic
 from networks import SharedActor
 from sumo_env import FairTSCEnv
@@ -275,6 +276,7 @@ def train_sociallight(
     v_ue=None,
     save_critic: bool = True,
     additional_sumo_cmd: Optional[str] = None,
+    artifact_dir: Optional[str] = None,
 ) -> Dict:
     if seed is None:
         seed = C.SEED
@@ -305,6 +307,10 @@ def train_sociallight(
         for ep in range(num_episodes):
             ep_R, data = collect_episode_sociallight(
                 env, actor, device, seed=seed + ep, neighbor_map=neighbor_map, distances=distances
+            )
+            write_train_episode(artifact_dir, "sociallight", env, ep + 1, ep_R, seed=seed)
+            write_green_split_episode(
+                artifact_dir, "sociallight", env, ep + 1, stage="train", seed=seed
             )
             if v_ue is None and ep == 0:
                 v_ue = load_shared_ue_critic(env=env, device=device)
@@ -341,6 +347,9 @@ def train_sociallight(
             env, actor, device, seed=seed + num_episodes,
             neighbor_map=neighbor_map, distances=distances, coll=coll, rollout=rollout,
         )
+        write_green_split_episode(
+            artifact_dir, "sociallight", env, num_episodes + 1, stage="eval", seed=seed
+        )
         env_metrics = coll.finalize(env)
         if v_ue is None:
             v_ue = load_shared_ue_critic(env=env, device=device)
@@ -352,8 +361,15 @@ def train_sociallight(
         env.close()
 
 
-def main(v_ue=None, additional_sumo_cmd: Optional[str] = None, **_unused):
-    return train_sociallight(num_episodes=50, v_ue=v_ue, additional_sumo_cmd=additional_sumo_cmd)
+def main(v_ue=None, additional_sumo_cmd: Optional[str] = None, artifact_dir: Optional[str] = None,
+         num_episodes: Optional[int] = None, seed: Optional[int] = None, **_unused):
+    return train_sociallight(
+        num_episodes=50 if num_episodes is None else int(num_episodes),
+        seed=seed,
+        v_ue=v_ue,
+        additional_sumo_cmd=additional_sumo_cmd,
+        artifact_dir=artifact_dir,
+    )
 
 
 if __name__ == "__main__":
