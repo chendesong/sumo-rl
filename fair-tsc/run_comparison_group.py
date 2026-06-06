@@ -130,6 +130,10 @@ def _default_out_dir(group: str, seed: int) -> str:
 
 
 def _load_v_ue():
+    if not C.UE_CKPT:
+        raise ValueError(
+            "Formal comparison requires FAIR_TSC_UE_CKPT to point at the shared IPPO/UE reference checkpoint."
+        )
     env = FairTSCEnv(
         net_file=C.NET_FILE,
         route_file=C.ROUTE_FILE,
@@ -139,7 +143,7 @@ def _load_v_ue():
         min_green=C.MIN_GREEN,
     )
     try:
-        return load_shared_ue_critic(env=env)
+        return load_shared_ue_critic(ckpt_path=C.UE_CKPT, env=env)
     finally:
         env.close()
 
