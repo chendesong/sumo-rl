@@ -43,7 +43,10 @@ from evaluate import (
 )
 
 
-FAIRSIGNAL_ALPHA = float(os.environ.get("FAIR_TSC_FAIRSIGNAL_ALPHA", "2.0"))
+# The FairSignal penalty is quadratic in intersection queues. On the LMHU-ped
+# route, alpha=2.0 overwhelms the queue-efficiency term, so the default is a
+# scale-matched value while remaining overrideable from the run script.
+FAIRSIGNAL_ALPHA = float(os.environ.get("FAIR_TSC_FAIRSIGNAL_ALPHA", "0.02"))
 
 
 def _agent_incoming_lanes(sumo_inner, agent_id) -> List[str]:

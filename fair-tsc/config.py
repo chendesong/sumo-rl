@@ -162,7 +162,7 @@ NUM_AGENTS = 16
 
 
 # Theil numerical safety
-THEIL_EPS = 1e-6
+THEIL_EPS = float(os.environ.get("FAIR_TSC_THEIL_EPS", "1e-6"))
 THEIL_EMA_BETA = 0.9
 
 
